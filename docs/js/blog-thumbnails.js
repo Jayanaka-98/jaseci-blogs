@@ -10,29 +10,31 @@ function addBlogThumbnails() {
   const blogPosts = document.querySelectorAll('article.md-post');
 
   // Enhanced image mappings - match by title, URL, and content
+  // IMPORTANT: More specific keys must come before general ones!
   const imageMap = {
+    'listening to builders': '/assets/nairobi-hackathon-feedback-1.png',
     'nairobi': '/assets/nairobi-ai-jaseci-ouk-1.jpg',
     'protomcp': '/assets/mcp-protolab/landing-page.png',
     'postman': '/assets/mcp-protolab/landing-page.png',
     'mcp': '/assets/mcp-protolab/landing-page.png',
-    'meta-packages': '/assets/jaseci_labs_logo.PNG',
-    'meta': '/assets/jaseci_labs_logo.PNG',
-    'packages': '/assets/jaseci_labs_logo.PNG',
+    'meta-packages': '/assets/jaseci_labs_logo.jpg',
+    'meta': '/assets/jaseci_labs_logo.jpg',
+    'packages': '/assets/jaseci_labs_logo.jpg',
     'four-things': '/assets/jaseci_labs_logo.jpg',
     'four things': '/assets/jaseci_labs_logo.jpg',
     'object-spatial': '/assets/jaseci_labs_logo.jpg',
-    'browser-automation': '/assets/jaseci_labs_logo.PNG',
-    'walkers': '/assets/jaseci_labs_logo.PNG',
+    'browser-automation': '/assets/jaseci_labs_logo.jpg',
+    'walkers': '/assets/jaseci_labs_logo.jpg',
     'dataclasses': '/assets/jaseci_labs_logo.jpg',
     'python': '/assets/jaseci_labs_logo.jpg',
-    'jac-vs-sota': '/assets/jaseci_labs_logo.PNG',
-    'same app': '/assets/jaseci_labs_logo.PNG',
-    'polyglot': '/assets/jaseci_labs_logo.PNG',
-    'todo': '/assets/jaseci_labs_logo.PNG',
+    'jac-vs-sota': '/assets/jaseci_labs_logo.jpg',
+    'same app': '/assets/jaseci_labs_logo.jpg',
+    'polyglot': '/assets/jaseci_labs_logo.jpg',
+    'todo': '/assets/jaseci_labs_logo.jpg',
     'jacd': '/assets/jaseci_labs_logo.jpg',
-    'making-jac': '/assets/jaseci_labs_logo.PNG',
-    'traversals': '/assets/jaseci_labs_logo.PNG',
-    'faster': '/assets/jaseci_labs_logo.PNG',
+    'making-jac': '/assets/jaseci_labs_logo.jpg',
+    'traversals': '/assets/jaseci_labs_logo.jpg',
+    'faster': '/assets/jaseci_labs_logo.jpg',
     'socratic': '/assets/jaseci_labs_logo.jpg',
     'prompt': '/assets/jaseci_labs_logo.jpg'
   };

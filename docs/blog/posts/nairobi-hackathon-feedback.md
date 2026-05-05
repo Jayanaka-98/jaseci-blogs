@@ -3,8 +3,8 @@ date: 2026-03-12
 authors:
   - mars
 categories:
-  - Developers
-  - AI & ML
+  - Community
+image: /assets/nairobi-hackathon-feedback-1.png
 slug: nairobi-hackathon-feedback
 ---
 
