@@ -858,17 +858,18 @@ article.md-post {
     font-size: 1.5rem !important;
 }
 
-/* Thumbnail area - 25% width */
+/* Thumbnail area - 25% width with fixed aspect ratio (4:3) */
 .md-post__thumbnail {
     width: 25%;
-    height: 120px;
     flex-shrink: 0;
+    aspect-ratio: 4 / 3;
     overflow: hidden;
     border-radius: var(--radius-lg);
     background: var(--surface);
     box-shadow: var(--shadow-md);
     transition: var(--transition-base);
     margin-top: var(--space-2);
+    max-width: 300px;
 }
 
 .md-post__thumbnail img {
@@ -895,17 +896,18 @@ article.md-post {
         margin: 0;
     }
 
-    /* Thumbnail takes 25% */
+    /* Thumbnail takes 25% with maintained aspect ratio */
     .md-post__thumbnail {
         width: 25%;
-        height: 120px;
+        aspect-ratio: 4 / 3;
     }
 }
 
-/* Large desktop - slightly larger images */
+/* Large desktop - allow thumbnails to grow slightly */
 @media (min-width: 1200px) {
     .md-post__thumbnail {
-        height: 140px;
+        max-width: 350px;
+        aspect-ratio: 4 / 3;
     }
 }
 
@@ -926,7 +928,7 @@ article.md-post {
 
     .md-post__thumbnail {
         width: 100%;
-        height: 180px;
+        aspect-ratio: 4 / 3;
         margin-top: 0;
     }
 

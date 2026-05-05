@@ -81,15 +81,16 @@ function addThumbnailToPost(post, imageUrl) {
                        post.querySelector('h2') ||
                        post.querySelector('h1');
 
-  // Create thumbnail container
+  // Create thumbnail container with fixed aspect ratio (4:3)
   const thumbnail = document.createElement('div');
   thumbnail.className = 'md-post__thumbnail';
   thumbnail.style.cssText = `
     width: 25%;
     flex-shrink: 0;
-    height: 120px;
+    aspect-ratio: 4 / 3;
     overflow: hidden;
     border-radius: 8px;
+    max-width: 300px;
   `;
 
   const img = document.createElement('img');
@@ -99,6 +100,7 @@ function addThumbnailToPost(post, imageUrl) {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    display: block;
   `;
   thumbnail.appendChild(img);
 
