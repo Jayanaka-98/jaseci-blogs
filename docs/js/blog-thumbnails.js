@@ -12,7 +12,7 @@ function addBlogThumbnails() {
   // Enhanced image mappings - match by title, URL, and content
   // IMPORTANT: More specific keys must come before general ones!
   const imageMap = {
-    'listening to builders': '/assets/nairobi-hackathon-feedback-1.png',
+    'listening to builders': '/assets/nairobi-hackathon-feedback-2.png',
     'nairobi': '/assets/nairobi-ai-jaseci-ouk-1.jpg',
     'protomcp': '/assets/mcp-protolab/landing-page.png',
     'postman': '/assets/mcp-protolab/landing-page.png',
