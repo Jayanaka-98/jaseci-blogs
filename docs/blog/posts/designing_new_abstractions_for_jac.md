@@ -31,8 +31,12 @@ graph TD
     subgraph MID ["jac — Nothing app-specific"]
         B["Exposes abstractions<br/><i>Language keywords · Builtins · Standard library</i>"]
     end
-    subgraph BOT ["jac-scale — Nothing app-specific"]
-        C["Implements abstractions<br/><i>MongoDB, Redis, FastAPI, auth, deployment</i>"]
+    subgraph BOT ["Plugins — Nothing app-specific"]
+        C["jac-scale<br/><i>Scaling, persistence,<br/>auth, deployment</i>"]
+        D["byllm<br/><i>LLM provider<br/>integrations</i>"]
+        E["jac-client<br/><i>Full-stack web<br/>frontend</i>"]
+        F["jac-mcp<br/><i>AI-assisted<br/>dev tooling</i>"]
+        G["...<br/><i>Future<br/>plugins</i>"]
     end
 
     TOP -. "depends on" .-> MID
@@ -43,7 +47,7 @@ graph TD
     style BOT fill:#e3f2fd,stroke:#1565c0,color:#000
 ```
 
-The **top layer** is user code — the applications people build with Jac. It consumes abstractions but doesn't define them. The **middle layer** is the Jac language and runtime itself — it *defines and exposes* the abstractions that make Jac what it is. The **bottom layer** consists of plugins like `jac-scale` that provide production-grade implementations of those abstractions without changing their semantics.
+The **top layer** is user code — the applications people build with Jac. It consumes abstractions but doesn't define them. The **middle layer** is the Jac language and runtime itself — it *defines and exposes* the abstractions that make Jac what it is. The **bottom layer** is the plugin ecosystem — packages like `jac-scale` (scaling and persistence), `byllm` (LLM integrations), `jac-client` (full-stack web), and `jac-mcp` (AI dev tooling) that provide implementations and capabilities without changing the core language semantics. All plugins register via `[project.entry-points."jac"]` and can override runtime behavior, but they never alter what keywords or builtins exist.
 
 Notice the critical property: the two lower layers are both labeled "nothing app-specific." This means no business logic leaks into the platform layers. And the top and bottom layers are *independent of each other* — a Jac program runs identically whether `jac-scale` is installed or not.
 
@@ -195,7 +199,7 @@ If a function doesn't touch nodes, edges, walkers, anchors, or the graph, it alm
 
 There's a bonus criterion that validates builtin status: **builtins should work identically regardless of which plugins are installed.**
 
-`save()` persists an anchor. On vanilla Jac, that means in-memory storage. With `jac-scale`, it means MongoDB. The caller doesn't know or care. This is possible because builtins are defined at the `jac` layer but their implementations are provided through `JacRuntimeInterface`, which plugins can override.
+`save()` persists an anchor. On vanilla Jac, that means in-memory storage. With `jac-scale`, it means MongoDB. Similarly, `byllm` overrides the LLM runtime hooks so `by llm` abilities route to the provider of your choice. The caller doesn't know or care about the backend. This is possible because builtins are defined at the `jac` layer but their implementations are provided through `JacRuntimeInterface`, which any plugin can override.
 
 If your proposed builtin wouldn't make sense across different runtime backends, it probably isn't a builtin — it's a plugin-specific function.
 
