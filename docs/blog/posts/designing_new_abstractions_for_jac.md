@@ -24,20 +24,23 @@ This post is a deep guide for contributors to the Jaseci codebase. If you're add
 Jac's architecture is built as a stack of three distinct layers, each with a clear role:
 
 ```mermaid
-block-beta
-    columns 1
-    block:top["🔷 jac program — Application-specific"]:1
-        A["Uses abstractions"]
+graph TD
+    subgraph TOP ["jac program — Application-specific"]
+        A["Uses abstractions<br/><i>Your app code: walkers, nodes, edges, business logic</i>"]
     end
-    block:mid["🔶 jac — Nothing app-specific"]:1
-        B["Exposes abstractions"]
+    subgraph MID ["jac — Nothing app-specific"]
+        B["Exposes abstractions<br/><i>Language keywords · Builtins · Standard library</i>"]
     end
-    block:bot["🔷 jac-scale — Nothing app-specific"]:1
-        C["Implements abstractions"]
+    subgraph BOT ["jac-scale — Nothing app-specific"]
+        C["Implements abstractions<br/><i>MongoDB, Redis, FastAPI, auth, deployment</i>"]
     end
 
-    top --> mid
-    bot --> mid
+    TOP -. "depends on" .-> MID
+    BOT -. "depends on" .-> MID
+
+    style TOP fill:#e3f2fd,stroke:#1565c0,color:#000
+    style MID fill:#fff8e1,stroke:#f57f17,color:#000
+    style BOT fill:#e3f2fd,stroke:#1565c0,color:#000
 ```
 
 The **top layer** is user code — the applications people build with Jac. It consumes abstractions but doesn't define them. The **middle layer** is the Jac language and runtime itself — it *defines and exposes* the abstractions that make Jac what it is. The **bottom layer** consists of plugins like `jac-scale` that provide production-grade implementations of those abstractions without changing their semantics.
