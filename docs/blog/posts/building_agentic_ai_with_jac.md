@@ -8,7 +8,7 @@ categories:
 slug: building-agentic-ai-with-jac
 ---
 
-# Everyone Is Building Bloat
+# Déjà Vu: Why Every Agent Codebase Rebuilds the Same Seven Wheels
 
 *Agents are first-class citizens in our lives. They aren't first-class citizens of any language we build them in. That gap is the whole story.*
 
@@ -16,110 +16,59 @@ LLMs draft our emails, write our code, and run our businesses. We talk to them l
 
 The moment we sit down to *build* with them, they go back to being strangers.
 
+---
+
+## The Gap
+
 <!-- more -->
 
-People build agents with whatever is *abundant*: a Python decorator here, a JSON schema there, a prompt template that swelled into 800 lines and never got smaller. Every team writes its own dispatcher, its own retry loop, its own subagent spawner. Every team hides the parts the language can't see inside a `SKILL.md` file and prays the model reads it carefully.
+An agent is a program built around LLM calls. The calls do the thinking. The code around them decides which calls to make, what to do with the results, and what to call next.
 
-There's a name for what comes out the other end. It's **bloat**, and it isn't an accident of style. It's what happens when a first-class concern in the world is a second-class concern in the language.
+In Python or TypeScript, the connecting logic ends up in one of two places: the prompt, or glue code around the LLM call. In the prompt, it's a string. Renames don't propagate, you can't test whether the model follows the steps, and the model re-reads the whole prompt every turn, costing tokens. In glue code, you get types. But every team writes its own routing, retries, and tool dispatching from scratch.
 
-```
-            ┌─────────────────────────────────────────────────┐
-            │                                                 │
-            │   Pipe  ─┐                                      │
-            │          ├──►   █████████████████████████       │
-            │   Loop  ─┤      ██  PROSE IN A PROMPT  ██       │
-            │          ├──►   █████████████████████████       │
-            │   Route ─┤                                      │
-            │          ├──►   (the language doesn't see it,   │
-            │   Spawn ─┘       so we encode it as English)    │
-            │                                                 │
-            └─────────────────────────────────────────────────┘
-```
+That's the gap. It shows up in every agent codebase in the wild: OpenClaw, Hermes, OpenCode, most of the code is the language working around it. So a question:
 
-This blog walks the gap in three parts. First, the diagnosis. Then the half of an agent any host language *can* see (the **Mind**). Then the half it can't (the **Flow**), and what changes when the language sees that too.
+!!! quote ""
+
+    *If "agent" were a feature of the language itself, what would have to be in it?*
+
+The answer turns out to be small: **seven primitives**. Three about what an LLM does inside a call (the **Mind**), four about how work moves between calls (the **Flow**). Every agent codebase already implements all seven; it just does so in prose or in glue code, where the typechecker can't see them. The rest of this post is what those seven look like when the language has words for them. The language is [**Jac**](https://docs.jaseci.org/) with the [**byLLM**](https://docs.jaseci.org/) plugin.
 
 !!! info "About the code"
 
     Every Jac snippet below is self-contained and runs with `jac run <file>.jac` against a configured model. Copy any block, save it, and you'll see the agent execute end-to-end.
 
----
+<!-- ---
 
-## Diagnosis
+## The Gap
 
-!!! abstract ""
+Two places agent logic actually ends up today:
 
-    *The language sees the call. It doesn't see the agent.*
+**In the prompt.** *"First do X, then if Y do Z, retry up to three times."* Flexible, fast to write, completely unverified. A typo fails silently. A smaller model defects without warning. The prose costs thousands of tokens on every turn because the model has to re-read it to know what comes next.
 
-Open any production agent codebase (OpenClaw, Hermes, OpenCode, pi-mono) and the agent-specific code is overwhelmingly *plumbing for things the host language has no idea exist*: a skill loader, a tool registry, a subagent spawner, a router, a retry loop, a verdict parser, a memory store, a gateway.
+**In glue code.** A tool dispatcher checks `allowed-tools` before the model gets a turn. A retry runner re-invokes on parse failure. A session store holds memory. Real code, with real types, but every team writes its own, and it's rigid per-capability: a skill is either fully structured or fully prose. There is no in-between.
 
-None of these are application logic. They are **the language doing impressions of features it doesn't have.**
-
-Here's what an LLM call looks like to a Python program:
-
-```
-   ┌───────────┐                              ┌───────────┐
-   │  caller   │  ──── prompt: str ────────►  │   LLM     │
-   │           │  ◄──── reply: str ─────────  │           │
-   └───────────┘                              └───────────┘
-         ▲
-         │
-   the language sees this: a function call and a return.
-   it does not see what comes next.
-```
-
-Two strings cross a wire. As far as Python is concerned, nothing agentic has happened.
-
-But an agent is **not one call.** An agent is dozens of calls strung together with structure: *this output feeds that input*, *try again if the verdict is bad*, *spawn three workers and merge*, *let the model pick which expert to ask*. All of that structure is *agent code*, and none of it lives where the host language can typecheck it.
-
-So it leaks. There are exactly two places it can leak to, and every agent codebase picks some mix of both:
-
-```
-                  ┌─────────────────────────────────────────────────┐
-                  │                                                 │
-                  │      Bleed Path A         │     Bleed Path B    │
-                  │      ─────────────        │     ─────────────   │
-                  │      into the PROMPT      │     into ad-hoc     │
-                  │                           │     HARNESS CODE    │
-                  │      (workflow as         │                     │
-                  │       paragraph,          │     (allowed-tools, │
-                  │       schema as           │      dispatch tables│
-                  │       sentence,           │      retry runners, │
-                  │       rules as            │      session stores,│
-                  │       bullet list)        │      manifests...)  │
-                  │                           │                     │
-                  │      flexible, fragile    │     rigid, brittle  │
-                  │                           │                     │
-                  └─────────────────────────────────────────────────┘
-```
-
-Path A is what prose-heavy agents do: everything is a sentence in the prompt, and the model is trusted to read and obey. Flexible, but no floor. A smaller model can violate any "rule" in the document because nothing is enforced outside the model.
-
-Path B is what manifest-style harnesses do: the gates are real code. A tool dispatcher checks `allowed-tools` before the model gets a turn, prerequisites gate visibility, tags route requests. The floor is solid. But the harness is rigid by whole-capability: the entire skill is either structured or it isn't.
-
-Both are real engineering. Both leave the *agent* outside what the language can see.
-
-!!! quote ""
-
-    When the language doesn't have a word for what you're building, it leaks. Sometimes into the prompt. Sometimes into a bespoke harness. Always somewhere outside the typechecker.
+Either way, the things developers care about are out of reach: type-checked workflows, refactor-safe agents, testable control flow, predictable behavior on smaller models. That's the gap the seven primitives are designed to close. -->
 
 ---
 
 ## The Mind
 
-!!! abstract ""
+Three things any single LLM call usefully does:
 
-    *Three things any LLM call does. The only surface the host language has ever been able to see.*
+1. **Generate**: LLM returns free text from a function signature.
+2. **Extract**: LLM returns typed data validated against a schema.
+3. **Invoke**: LLM calls tools in a ReAct loop until it has an answer.
 
-Before talking about what the language *can't* see, give it credit for what it can. There are exactly three things a single LLM call usefully does. And even these three things weren't really part of any host language until **byLLM** put them there: in Python or TypeScript, an LLM call is just an HTTP request with a string payload. The language never learned what an LLM *is*. Every team writes the same glue.
 
-### Generate
+### 1. Generate
 
-!!! abstract ""
+LLM returns free text. The function signature is the prompt.
 
-    *LLM → free text. The function signature IS the prompt.*
+<div class="collapse" data-lines="10">
 
 ```python
-# ─── Python: an LLM call is an HTTP request with a string ────
+# Python: an LLM call is an HTTP request with a string
 from openai import OpenAI
 client = OpenAI()
 
@@ -134,32 +83,28 @@ def answer(question: str) -> str:
     return response.choices[0].message.content
 ```
 
+</div>
+
 ```jac
 # Jac: an LLM call is a function
 """Answer a question about any topic."""
 def answer(question: str) -> str by llm();
 
 with entry {
-    q = "What are three interesting facts about computer architecture?";
-    print(f"Q: {q}\n");
-    print(f"A: {answer(q)}");
+    response = answer("What are three interesting facts about computer architecture?");
 }
 ```
 
-This isn't a code-golf gag. The Python version has *no information* in it that the Jac version doesn't: model name, system prompt, question, return type all live in the Jac signature, docstring, and runtime config. Python is paying tax to a language that doesn't know what an LLM is.
+The Python version has no information in it that the Jac version doesn't. Model name, system prompt, question, return type, all of it lives in the Jac signature, docstring, and runtime config. To change the agent's behavior in Jac, change the signature. Not a YAML file. Not a prompt template. The semantics of the code *are* the prompt. Jac calls this **Meaning-Typed Programming**.
 
-To change the agent's behavior in Jac, change the signature. Not a YAML file. Not a `PromptTemplate("...")` string. Not a system prompt buried three indentation levels deep in another function. The *semantics* of the code *are* the prompt. We call this **Meaning-Typed Programming.**
+### 2. Extract
 
-### Extract
+LLM returns typed data. The compiler enforces the schema.
 
-!!! abstract ""
-
-    *LLM → typed data. The compiler enforces the schema.*
-
-The instant you want structured output, every other language hands you back a string and tells you to write a parser. Even with Pydantic and the modern `response_format` API doing most of the work:
+<div class="collapse" data-lines="10">
 
 ```python
-# ─── Python: schema-as-side-channel ──────────────────────────
+# Python: schema declared twice, once as a type, once as an API argument
 from pydantic import BaseModel
 from enum import Enum
 from openai import OpenAI
@@ -185,7 +130,7 @@ def classify_paper(title: str, abstract: str) -> PaperClassification:
     return response.choices[0].message.parsed   # may be None, must check
 ```
 
-The schema is declared *twice*: once in the type system, and once again as a runtime argument to the API. The language never connects the two. If the model returns malformed JSON, you get `None` and have to retry yourself.
+</div>
 
 In Jac:
 
@@ -206,27 +151,20 @@ with entry {
         title="Attention Is All You Need",
         abstract="The dominant sequence transduction models are based on..."
     );
-    print(f"Topic:   {result.topic}");
-    print(f"Summary: {result.one_line_summary}\n");
-    print("Key contributions:");
-    for c in result.key_contributions {
-        print(f"  - {c}");
-    }
+    # result.topic is a Topic enum member, result.key_contributions is list[str]
 }
 ```
 
-The return type *is* the schema. The compiler knows about it. If the model produces something malformed, the runtime retries with the validation error in scope, automatically. The `try / json.loads / KeyError / pydantic.ValidationError` layer that lives in every production agent today simply does not exist.
+The return type *is* the schema; the compiler knows about it. If the model produces something malformed, the runtime retries with the validation error in scope, automatically. The `try / json.loads / pydantic.ValidationError` layer that lives in every production agent today doesn't exist here.
 
-### Invoke
+### 3. Invoke
 
-!!! abstract ""
+LLM calls tools. ReAct in one line.
 
-    *LLM → tool calls. ReAct in one line.*
-
-Tool use is the worst of the three to write by hand. The ReAct loop, the JSON schemas for every tool, the dispatch table, the message accumulation, the stop condition. None of it is the language's idea:
+<div class="collapse" data-lines="10">
 
 ```python
-# ─── Python: hand-rolled ReAct (sketch) ──────────────────────
+# Python: hand-rolled ReAct
 TOOLS = [
     {"type": "function", "function": {
         "name": "search_papers",
@@ -253,7 +191,9 @@ def research(query: str) -> str:
                              "content": str(result)})
 ```
 
-Most of that is the language doing impressions of features it doesn't have. The dispatch table re-declares functions that already exist. The tool schema re-declares parameters that are already typed. The while-loop re-implements the ReAct cycle every team in the world is re-implementing this week.
+</div>
+
+The dispatch table re-declares functions that already exist. The tool schema re-declares parameters that are already typed. The while-loop re-implements the ReAct cycle every team in the world is re-implementing this week.
 
 In Jac:
 
@@ -269,102 +209,35 @@ def research(query: str) -> str by llm(
 sem research = "Research a topic by searching papers, checking citations, and summarizing findings.";
 
 with entry {
-    q = "Recent papers on transformer architectures and their citation impact";
-    print(f"Q: {q}\n");
-    print(f"A: {research(q)}");
+    findings = research("Recent papers on transformer architectures and their citation impact");
 }
 ```
 
-Tools are just functions. The runtime introspects their signatures, exposes them to the model, runs the ReAct loop, and only returns when the model says it's done. The reason it's two lines instead of fifty isn't that something is hidden. It's that **the language knows what an LLM call is.**
-
-### Three primitives, one surface
-
-```
-              ──────────────  the visible surface  ──────────────
-
-                            Python / TS              Jac
-                            ────────────             ─────────────
-              Generate  →   ~15 lines of glue        1 line
-              Extract   →   schema declared twice    1 line
-              Invoke    →   ~50 lines of ReAct       1 line
-
-              ────────  even this much wasn't really in the  ────
-              ────────  language until something made it so  ────
-```
-
-These three primitives have *always been technically possible* in any language with an HTTP client. The difference isn't capability. It's whether the language ever knew you were doing it. byLLM is the first time a function declaration is enough to make an LLM call a real language construct: typed, composable, refactorable, statically meaningful.
-
-With these in hand, you can convince yourself for a while that this is the whole picture.
-
-Then you try to build a real agent.
-
-!!! quote ""
-
-    The work begins to **bleed.**
-
-A real agent doesn't make one LLM call. It chains five. It retries when a verdict comes back wrong. It branches when the user's intent shifts. It spawns parallel investigations and merges them. The moment you wire two Mind primitives together with a `for` loop, an `if` statement, or a thread pool, *that wiring is doing work the language can't see.*
-
-It isn't Mind work anymore. It's **Flow** work. And in every language that doesn't know the difference, Flow work bleeds back into the prompt.
+Tools are just functions. The runtime introspects their signatures, exposes them to the model, runs the ReAct loop, and only returns when the model says it's done.
 
 ---
 
-## The Bleed
-
-A real agent is two layers, not one. There are the LLM calls themselves, and there's the control logic *between* the calls: when to retry, who to route to, when to fan out, how partial results compose.
-
-The host language sees the first layer. It can't see the second.
-
-So the second layer has to live somewhere else. In every language but one, that somewhere is the prompt: re-read by the model on every turn at a cost of thousands of tokens. In a manifest-style harness it's ad-hoc dispatcher code wrapped around the call. Either way, the actual program logic of the agent lives outside the language.
-
-The fix isn't a smarter prompt. It's a language that sees the second layer.
+That's the Mind. Three primitives, one per LLM call. With them in hand, you can wire calls together with `for` loops and `if` statements and convince yourself you have an agent. But the moment two calls need to talk, the moment one's output feeds the next, or a retry kicks in, or three workers run in parallel, that wiring is the agent, and your `for` loop is doing the agent's job in plain Python. That work has a different shape. It belongs in the next four primitives.
 
 ---
 
 ## The Flow
 
-!!! abstract ""
+Four kinds of wiring between Mind calls:
 
-    *Four things that happen between calls. The half the host language has never been able to see, and what they look like when it can.*
+1. **Pipe**: sequential composition. One call's output is the next call's input.
+2. **Route**: pick which handler runs based on what came in.
+3. **Loop**: repeat until a typed quality check passes.
+4. **Spawn**: fan out parallel work, fan in the results.
 
-There are exactly four Flow primitives. Each is something every agent codebase already does, badly, in prose.
 
-### Pipe: a chain of nodes
+### 1. Pipe
 
-!!! abstract ""
+Pipe is a literal chain of nodes wired by edges, with a walker that visits each in turn and carries state forward.
 
-    *A walker carries state forward through a sequence of nodes connected by edges.*
-
-In most agent codebases today, Pipe is a sentence in the prompt:
-
-```
-                  prose in the prompt
-              ┌──────────────────────────────┐
-              │  "First, draft an            │
-              │   explanation. Then add      │
-              │   examples. Then condense    │
-              │   into a 2-3 sentence        │
-              │   summary. Be sure to..."    │
-              └──────────────────────────────┘
-                            ▼
-                  one giant LLM call that
-                  hopes the model follows
-                  the steps in order
-```
-
-In Jac, Pipe is a **graph**: a literal chain of nodes wired by edges, with a walker that visits each in turn and carries state forward.
-
-```mermaid
-flowchart LR
-    R((root)) --> D[Draft]
-    D --> E[Examples]
-    E --> S[Summary]
-    S --> Done([Done])
-
-    W{{Explainer walker}}
-    W -. visits, accumulating text .-> D
-    W -.-> E
-    W -.-> S
-```
+<figure markdown="span">
+  ![Pipe Pattern](../../assets/diagrams/pipe.gif){ loading=lazy }
+</figure>
 
 ```jac
 node Draft    { def run(topic: str) -> str by llm(); }
@@ -378,17 +251,14 @@ walker Explainer {
 
     can do_draft with Draft entry {
         self.text = here.run(self.topic);
-        print(f"[1/3 Draft]\n{self.text}\n");
         visit [-->];
     }
     can do_examples with Examples entry {
         self.text = here.run(self.text);
-        print(f"[2/3 + Examples]\n{self.text}\n");
         visit [-->];
     }
     can do_summary with Summary entry {
         self.text = here.run(self.text);
-        print(f"[3/3 Summary]\n{self.text}");
         visit [-->];
     }
 }
@@ -400,44 +270,17 @@ with entry {
 }
 ```
 
-Each step is a small, scoped prompt living *on its node*. None of them ever see the others' instructions, only the typed data the walker carries forward on `self.text`. The pipeline isn't a sentence in a prompt and it isn't a sequence of function calls in `main()`. **It's a topology.** To insert a "fact-check" stage tomorrow, you don't edit a function or rewrite a prompt: you connect a new node. The graph *is* the pipeline.
+Each step is a small, scoped prompt living on its node. None see the others' instructions, only the typed data the walker carries forward. To insert a fact-check stage tomorrow, connect a new node into the chain. The graph *is* the pipeline.
 
-### Route: choosing where to go next
+### 2. Route
 
-!!! abstract ""
-
-    *The LLM reads the graph and picks where the walker goes.*
-
-This is where Jac stops looking like decorated Python and starts looking like something genuinely new.
-
-In every other agent codebase, Route looks like one of two things: an if/elif chain over keywords, or a giant prompt that says *"you have access to the following experts: hardware, software, AI. Pick one and reply with its name."* The output is a string the surrounding code parses with prayer.
-
-In Jac, Route is a single line. The same logic written two ways:
+The LLM reads the graph and picks which node the walker visits.
 
 ```jac
-# ─── routing as prose (the bleed) ─────────────────────────────
-def pick_expert(query: str) -> str by llm();
-sem pick_expert = """
-You have access to three experts:
-- HardwareExpert: CPU, GPU, memory hierarchies, chip fabrication
-- SoftwareExpert: compilers, operating systems, runtimes
-- AIExpert: neural networks, LLMs, machine learning systems
-Pick one and respond with its name only. Do not include any other text.
-""";
-
-choice = pick_expert(query);            # → "HardwareExpert" (hopefully)
-if choice == "HardwareExpert" { ... }   # parse-and-pray dispatch
-elif choice == "SoftwareExpert" { ... }
-elif choice == "AIExpert"      { ... }
-```
-
-```jac
-# ─── routing as code ──────────────────────────────────────────
 node HardwareExpert {
     has description: str = "Expert in CPU, GPU, memory hierarchies, chip fabrication";
     def answer(q: str) -> str by llm();
     can respond with ResearchAssistant entry {
-        print("→ routed to HardwareExpert");
         visitor.response = self.answer(visitor.query);
     }
 }
@@ -445,7 +288,6 @@ node SoftwareExpert {
     has description: str = "Expert in compilers, operating systems, runtimes";
     def answer(q: str) -> str by llm();
     can respond with ResearchAssistant entry {
-        print("→ routed to SoftwareExpert");
         visitor.response = self.answer(visitor.query);
     }
 }
@@ -453,7 +295,6 @@ node AIExpert {
     has description: str = "Expert in neural networks, LLMs, machine learning systems";
     def answer(q: str) -> str by llm();
     can respond with ResearchAssistant entry {
-        print("→ routed to AIExpert");
         visitor.response = self.answer(visitor.query);
     }
 }
@@ -472,47 +313,19 @@ with entry {
     root ++> AIExpert();
 
     q = "How do branch predictors work in modern CPUs?";
-    print(f"Q: {q}");
     r = root spawn ResearchAssistant(query=q);
-    print(f"\nA: {r.response}");
 }
 ```
 
-The whole left-hand version (prose, parse, dispatch) collapses into one line:
+The route is a single line: `visit [-->] by llm(...)`. The LLM reads each connected node's `description` field and picks. To add a new expert, add a `node` with a `description`. No prompt edit, no dispatch-table edit. The graph *is* the routing table.
 
-```
-                       visit [-->] by llm()
-                              │
-                              ├── reads the graph topology
-                              ├── reads each node's description
-                              ├── picks the right one(s)
-                              └── walks the walker there
-```
+### 3. Loop
 
-To add a new expert tomorrow, add a `node` with a `description`. No prompt edit. No parser edit. **The graph is the routing table.**
+Self-correction expressed as a cycle in the graph: draft, evaluate, and if the verdict isn't good enough, take a typed retry edge back to revise.
 
-### Loop: a typed edge that closes a cycle
-
-!!! abstract ""
-
-    *The loop isn't a `while`. It's an edge in the graph that says "go back."*
-
-When the loop lives in the prompt, it sounds like this: *"After writing the draft, evaluate it. If it has weaknesses, revise it. Repeat up to 3 times or until you are satisfied."* The model decides when to stop. You hope it stops.
-
-You *could* express this as a `while` inside a walker ability. But a `while` is a generic Python-shaped construct. It could be anything. It doesn't say to a reader *"this is an agentic self-correction cycle."* The OSP-native way to say that is to put the cycle **in the graph itself**, as a typed edge that closes the loop:
-
-```mermaid
-flowchart LR
-    R((root)) --> D[Draft]
-    D --> E[Evaluate]
-    E -- verdict == GOOD --> A([Approved])
-    E -. RetryEdge<br/>verdict == NEEDS_IMPROVEMENT .-> Rv[Revise]
-    Rv --> E
-
-    linkStyle 3 stroke:#c00,stroke-width:2px
-```
-
-The cycle in the graph **is** the loop. The walker walks the edge or it doesn't. The exit condition rides on a typed verdict:
+<figure markdown="span">
+  ![Loop Pattern](../../assets/diagrams/loop.gif){ loading=lazy }
+</figure>
 
 ```jac
 enum Quality { GOOD, NEEDS_IMPROVEMENT }
@@ -523,7 +336,6 @@ obj Review {
     has suggestion: str;
 }
 
-# A typed edge that names the loop. Not "an edge", a RetryEdge.
 edge RetryEdge {
     has reason: str = "Verdict was NEEDS_IMPROVEMENT";
     has max_retries: int = 3;
@@ -542,28 +354,23 @@ walker TutorialWriter {
 
     can do_draft with Draft entry {
         self.draft = here.run(self.topic);
-        print(f"[Draft v{self.version}]\n{self.draft}\n");
         visit [-->];
     }
 
     can do_evaluate with Evaluate entry {
         review = here.run(self.draft, self.topic);
-        print(f"[Review] verdict = {review.quality}");
         if review.quality == Quality.GOOD {
-            print("→ approved, exiting loop\n");
-            visit [-->][?:Approved];                     # exit the loop
+            visit [-->][?:Approved];
         } else {
             self.feedback = f"{review.weaknesses}. {review.suggestion}";
-            print(f"→ retry: {self.feedback}\n");
-            visit [->:RetryEdge:->];                     # take the retry edge
+            visit [->:RetryEdge:->];
         }
     }
 
     can do_revise with Revise entry {
         self.version += 1;
         self.draft = here.run(self.draft, self.feedback);
-        print(f"[Draft v{self.version}]\n{self.draft}\n");
-        visit [-->];                                     # back to Evaluate
+        visit [-->];
     }
 }
 
@@ -572,32 +379,26 @@ with entry {
     revise = Revise(); done   = Approved();
 
     root ++> draft ++> eval_n;
-    eval_n ++> done;                # exit edge (verdict GOOD)
-    eval_n +>:RetryEdge:+> revise;  # the retry cycle, named
-    revise ++> eval_n;              # back around
+    eval_n ++> done;
+    eval_n +>:RetryEdge:+> revise;
+    revise ++> eval_n;
 
     root spawn TutorialWriter(topic="How cache coherence works in multicore processors");
 }
 ```
 
-`RetryEdge` is a **typed** edge with a name and its own fields. A reader scanning the graph sees `eval_n +>:RetryEdge:+> revise` and immediately knows what kind of loop this is. A `while` in a function body could be anything; a `RetryEdge` is one specific thing.
+`RetryEdge` is a typed edge with a name and its own fields. Scanning the graph, a reader sees `eval_n +>:RetryEdge:+> revise` and knows what kind of loop this is. A `while` in a function body could be anything; a `RetryEdge` is one specific thing. The exit condition rides on a typed `Quality` verdict, not a string-match on the model's reply.
 
-The loop body lives where it belongs, distributed across the nodes the walker visits. `Evaluate` evaluates. `Revise` revises. The cycle isn't a procedural detail buried inside a function; it's a structural feature of the program you can *see* in the graph.
+### 4. Spawn
 
-**Loop + Extract = self-correction with an honest stopping criterion. Loop + typed edge = self-correction you can draw.**
+`flow spawn` fans out work; `wait` fans it back in.
 
-### Spawn: parallel walkers, merged results
-
-!!! abstract ""
-
-    *`flow spawn` and `wait`: fan out work, fan in answers.*
-
-In Hermes, this is called *"isolated subagents for parallel workstreams."* In OpenClaw, *"delegation."* In both projects it's hundreds of lines of task-queue plumbing.
-
-In Jac it's two keywords:
+<figure markdown="span">
+  ![Spawn Pattern](../../assets/diagrams/spawn.gif){ loading=lazy }
+  <figcaption>The orchestrator fans out to parallel workers, then synthesizes their merged results</figcaption>
+</figure>
 
 ```jac
-# Tool stubs
 def search_papers(query: str) -> str { return f"papers on '{query}'"; }
 def get_citations(paper_id: str) -> int { return 1247; }
 
@@ -606,9 +407,7 @@ walker HardwareResearcher {
     has result: str = "";
     def investigate(topic: str) -> str by llm(tools=[search_papers, get_citations]);
     can start with Root entry {
-        print("  [HW] starting");
         self.result = self.investigate(self.topic);
-        print("  [HW] done");
     }
 }
 walker SoftwareResearcher {
@@ -616,9 +415,7 @@ walker SoftwareResearcher {
     has result: str = "";
     def investigate(topic: str) -> str by llm(tools=[search_papers, get_citations]);
     can start with Root entry {
-        print("  [SW] starting");
         self.result = self.investigate(self.topic);
-        print("  [SW] done");
     }
 }
 walker AIResearcher {
@@ -626,9 +423,7 @@ walker AIResearcher {
     has result: str = "";
     def investigate(topic: str) -> str by llm(tools=[search_papers, get_citations]);
     can start with Root entry {
-        print("  [AI] starting");
         self.result = self.investigate(self.topic);
-        print("  [AI] done");
     }
 }
 
@@ -638,8 +433,6 @@ walker SurveyAgent {
     def synthesize(topic: str, hw: str, sw: str, ai: str) -> str by llm();
 
     can start with Root entry {
-        print(f"Surveying: {self.topic}\n");
-        print("Spawning three researchers in parallel:");
         hw_task = flow root spawn HardwareResearcher(topic=self.topic);
         sw_task = flow root spawn SoftwareResearcher(topic=self.topic);
         ai_task = flow root spawn AIResearcher(topic=self.topic);
@@ -648,9 +441,7 @@ walker SurveyAgent {
         sw: any = wait sw_task;
         ai: any = wait ai_task;
 
-        print("\nAll researchers done. Synthesizing...\n");
         self.response = self.synthesize(self.topic, hw.result, sw.result, ai.result);
-        print(f"Survey:\n{self.response}");
     }
 }
 
@@ -659,131 +450,36 @@ with entry {
 }
 ```
 
-Each researcher carries **its own scoped tool list** and **its own context**. Three small focused prompts running concurrently, not one bloated prompt holding nine tools and hoping the model picks correctly.
+Each researcher carries its own scoped tool list and its own context. Three focused prompts running concurrently, not one bloated prompt holding nine tools and hoping the model picks correctly.
 
-```mermaid
-flowchart TB
-    SA{{SurveyAgent}}
-    SA -- flow spawn --> HW[HardwareResearcher]
-    SA -- flow spawn --> SW[SoftwareResearcher]
-    SA -- flow spawn --> AI[AIResearcher]
-    HW -- wait --> J((join))
-    SW -- wait --> J
-    AI -- wait --> J
-    J --> SY[synthesize<br/>by llm]
-```
+---
 
-### The bleed in the wild
+That's the Flow. Four kinds of wiring, each a property of the graph instead of a paragraph in a prompt. Plus the three Mind primitives, that's the whole list. Most of every agent codebase you've ever read is one of these seven, rebuilt by hand because the host language couldn't host it.
 
-The four most prominent open-source agent codebases:
+---
 
-| Project | Built in |
+## The Takeaway
+
+Jac has all seven Mind and Flow primitives directly in the language. A developer expresses an agent as code, with types, instead of as prose in a prompt or glue around an LLM call.
+
+The agents people are actually shipping aren't there yet. The most prominent open-source projects are all in Python or TypeScript:
+
+- [**OpenClaw**](https://github.com/openclaw/openclaw): personal assistant across 20+ chat channels (TypeScript)
+- [**Hermes**](https://github.com/NousResearch/hermes-agent) (Nous Research): self-improving agent (Python)
+- [**OpenCode**](https://github.com/anomalyco/opencode): open-source coding agent (TypeScript)
+
+Those languages weren't chosen because they're a natural fit for agents. They were chosen for library support and ecosystem maturity, nothing more. It's a reasonable trade, but it has a cost: every team rebuilds the same plumbing from scratch, and the codebase bloats around the missing primitives.
+
+The same handful of subsystems shows up in every codebase. In Jac, each one collapses to a single primitive or a small composition of them:
+
+| What every agent codebase builds by hand | In Jac |
 |---|---|
-| [**OpenClaw**](https://github.com/openclaw/openclaw): personal assistant across 20+ chat channels | TypeScript |
-| [**Hermes**](https://github.com/NousResearch/hermes-agent) (Nous Research): self-improving agent | Python |
-| [**OpenCode**](https://github.com/anomalyco/opencode): open-source coding agent | TypeScript |
-| [**pi-mono**](https://github.com/badlogic/pi-mono): coding agent + toolchain | TypeScript |
+| **Capability loader**: injects rules into the prompt, manages the tool registry | `by llm(tools=[...])` |
+| **Subagent spawner**: task queue, context isolation, result merging | `flow spawn` / `wait` |
+| **Router**: switch on a classifier, prompt that returns a name, dispatch table | `visit [-->] by llm()` |
+| **Loop runner**: while-loop over string verdicts, parse-and-pray exits | a typed edge closing a cycle in the graph |
+| **Self-extension**: agent writes more English prose to its own capability file | add a node, add an edge |
 
-Each is excellent. Each has picked its own point on the prose-vs-harness spectrum. The manifest-style harnesses (openclaw, hermes, pi-mono) get a lot right: they encode real invariants in code, gate tool access in the dispatcher, degrade gracefully on smaller models. That's the *floor* a prose-only skill never has.
+!!! quote ""
 
-But every one stops at the same place. They raise the floor for the whole capability or none of it. Workflow, schema, loops, fan-out, fan-in (all four Flow primitives) still get implemented by hand with whatever the host language could spare:
-
-```
-   What every agent codebase                       In Jac
-   has to build by hand:                           it's:
-   ─────────────────────────────────               ──────────────────
-   capability loader   (injects rules           →  by llm(tools=[...])
-                        into prompt,
-                        manages tool registry)
-
-   subagent spawner   (task queue,              →  flow spawn / wait
-                       context isolation,
-                       result merging)
-
-   router   (switch on classifier,              →  visit [-->] by llm()
-             prompt that returns a name,
-             dispatch table)
-
-   loop runner   (while-loop over               →  Loop + typed verdict
-                  string verdicts,                 closing the cycle
-                  parse-and-pray exits)            in the graph
-
-   self-extension   (agent writes more          →  add a node
-                     English prose to its          add an edge
-                     own capability file)
-```
-
-It isn't just the agent loop. **jac-cloud** is the runtime under all of this: every walker is already an HTTP endpoint, the graph is already the persistence layer, scheduled walkers are already the cron system, the user session is already a sub-root. So the *other* things these projects ship (gateways, schedulers, session stores) are runtime features too.
-
-The pattern repeats across all four codebases: most of the agent-specific code is the language doing impressions of features it doesn't have.
-
----
-
-## The Dial
-
-!!! abstract ""
-
-    *Selective rigidity. Pick how strict you want to be, per concept, not per capability.*
-
-There's a recurring objection to "agent-as-graph": *agents are supposed to be flexible; if you over-structure them, you lose the very thing that made the LLM useful.* It's fair, and worth taking seriously.
-
-It lands cleanly against the two existing approaches. Prose skills give you total flexibility and zero invariants. Manifest harnesses give you hard invariants and zero flexibility. Picking either is picking a side in a trade-off that shouldn't have to be a binary.
-
-OSP doesn't ask you to pick. It gives you a **dial**, set per concept:
-
-```
-                              ── strictness, per concept ──
-
-   typed node + schema    ─►   ███████████   hard invariants
-                                              (things you can't
-                                               afford to get wrong)
-
-   typed node + freeform  ─►   ██████        invariants on structure,
-   slots                                      freedom on content
-
-   freestyle walker       ─►   ███           "do something useful here"
-                                              with the full tool surface
-
-   raw passthrough        ─►   ░             prose path, untyped
-                                              (escape hatch for the
-                                               last 5% of cases)
-```
-
-The same agent, in the same program, can have a hard-typed `Theme` node (font ≥ 36pt, palette validated against contrast rules) sitting next to a freestyle slide node that hands the LLM a paintbrush. The graph encodes *which parts you care about being correct* and *which parts you want the model to be clever about* separately, per node, in the same file.
-
-|  | Prose-style | Manifest harness | OSP + byLLM |
-|---|---|---|---|
-| Default behavior | Free-form, model decides | Structured, harness gates | Structured, graph gates |
-| Opt-in flexibility | N/A (all flexible) | N/A (all rigid) | Per node, escape hatches |
-| Invariants enforced | By the model | By the harness | By the graph schema |
-| Stateful operations | None | Manual | Free (graph persists) |
-| Per-user isolation | None | Manual | Free (`walker:priv`) |
-| HTTP endpoints | None | Manual wiring | Free (auto-exposed) |
-| Same API for human + LLM | No | Sometimes | Yes (walkers are tools) |
-
-That last row is easy to miss and matters a lot. In Jac, the walkers you write for end-users *are* the tools your LLM calls. The byLLM orchestrator and a human REST client hit the same endpoint with the same arguments and get the same typed result. There is exactly one API; only the caller differs. Harnesses that do this well spend significant code on it. In Jac it falls out of the runtime.
-
----
-
-## The seven, on one page
-
-| | Primitive | One line |
-|---|---|---|
-| **Mind** | Generate | `def f(...) -> str by llm()` |
-| | Extract  | `def f(...) -> TypedObj by llm()` |
-| | Invoke   | `by llm(tools=[...])` |
-| **Flow** | Pipe     | a chain of nodes, walker carries state |
-| | Route    | `visit [-->] by llm(...)` |
-| | Loop     | a typed edge closing a cycle in the graph |
-| | Spawn    | `flow spawn` + `wait` |
-
-Three the language always could see. Four it never could, until now.
-
-Everyone is building bloat because the bleed has to go *somewhere*. Give it a language and it goes into the code instead.
-
----
-
-**Where to start.**
-
-- **Workshop tutorial**: [jaseci-labs/asplos-26-tutorial](https://github.com/jaseci-labs/asplos-26-tutorial). Seven exercises, seven solutions, one composed agent.
-- **Jac docs**: [docs.jaseci.org](https://docs.jaseci.org).
+    **With these primitives in the language, building an agent is just building the agent.**
