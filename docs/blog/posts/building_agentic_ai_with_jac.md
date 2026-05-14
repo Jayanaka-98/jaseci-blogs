@@ -34,7 +34,7 @@ These three problems share a root cause. The parts that *are* the agent, its too
 
     *If agents were a feature of the language itself, instead of being built from prompts and code that developers need to write from scratch, what would the language need to provide?*
 
-The answer is already in the [**Jac**](https://docs.jaseci.org/) programming language. Two ideas power it: **Meaning-Typed Programming** ([MTP](https://dl.acm.org/doi/10.1145/3763092)), brought in by the [**byLLM**](https://docs.jaseci.org/) plugin, and **Object-Spatial Programming** (OSP), Jac's native model for organizing computation around a graph. Together they give us **seven primitives** for building agents: three for what happens inside a single iteration (the **Mind**), and four for how work moves between iterations (the **Flow**). Every agent codebase already implements all seven, just by hand. The rest of this post is what those seven look like when the language has words for them.
+The answer is already in the [**Jac**](https://docs.jaseci.org/) programming language. Two ideas power it: **Meaning-Typed Programming** ([MTP](https://dl.acm.org/doi/10.1145/3763092)), brought in by the [**byLLM**](https://docs.jaseci.org/) plugin, and **Object-Spatial Programming** (OSP), Jac's native model for organizing computation around a graph. Together they give us **seven patterns** for building agents: three for what happens inside a single iteration (the **Mind**), and four for how work moves between iterations (the **Flow**). Every agent codebase already implements all seven, just by hand. The rest of this post is what those seven look like when the language has words for them.
 
 !!! info "About the code"
 
@@ -50,7 +50,7 @@ Two places agent logic actually ends up today:
 
 **In glue code.** A tool dispatcher checks `allowed-tools` before the model gets a turn. A retry runner re-invokes on parse failure. A session store holds memory. Real code, with real types, but every team writes its own, and it's rigid per-capability: a skill is either fully structured or fully prose. There is no in-between.
 
-Either way, the things developers care about are out of reach: type-checked workflows, refactor-safe agents, testable control flow, predictable behavior on smaller models. That's the gap the seven primitives are designed to close. -->
+Either way, the things developers care about are out of reach: type-checked workflows, refactor-safe agents, testable control flow, predictable behavior on smaller models. That's the gap the seven patterns are designed to close. -->
 
 ---
 
@@ -216,9 +216,9 @@ In Jac, tools are ordinary functions. The runtime introspects their signatures, 
 
 ---
 
-Together, these three primitives address two of our problems for anything that happens inside a single iteration: declaring the same intent in multiple places, and rewriting the same supporting code in every project. The moment two iterations need to coordinate, the wiring between them becomes the agent. One iteration's output feeds the next, a retry triggers a rerun, or several workers run in parallel.
+Together, these three patterns address two of our problems for anything that happens inside a single iteration: declaring the same intent in multiple places, and rewriting the same supporting code in every project. The moment two iterations need to coordinate, the wiring between them becomes the agent. One iteration's output feeds the next, a retry triggers a rerun, or several workers run in parallel.
 
-In Python or TypeScript, this wiring lives inside a generic `for` loop or inside a system prompt with numbered steps. That is the third problem, *control flow lives in prose*, and the next four primitives address it.
+In Python or TypeScript, this wiring lives inside a generic `for` loop or inside a system prompt with numbered steps. That is the third problem, *control flow lives in prose*, and the next four patterns address it.
 
 ---
 
@@ -447,18 +447,18 @@ In Python or TypeScript, parallel work usually collapses into either a single bl
 
 ---
 
-Together, these four primitives address the third of our problems: workflows that live inside a prompt as a string and cannot be verified or observed by the surrounding code. In Jac, the workflow is the graph itself, where the steps, branches, retries, and parallelism are all visible as connections between nodes. The seven primitives, three for what happens inside an iteration and four for how iterations connect, cover what every agent codebase rebuilds by hand in Python or TypeScript.
+Together, these four patterns address the third of our problems: workflows that live inside a prompt as a string and cannot be verified or observed by the surrounding code. In Jac, the workflow is the graph itself, where the steps, branches, retries, and parallelism are all visible as connections between nodes. The seven patterns, three for what happens inside an iteration and four for how iterations connect, cover what every agent codebase rebuilds by hand in Python or TypeScript.
 
 ---
 
 ## The Takeaway
 
-The seven Mind and Flow primitives map directly onto the three problems we started with.
+The seven Mind and Flow patterns map directly onto the three problems we started with.
 
 | The problem | How Jac addresses it |
 |---|---|
-| **The same intent written twice.** Tool schemas and structured-output classes have to be declared in code and described again in prompts or JSON specs, with nothing keeping the two halves in sync. | The Mind primitives keep intent in one place. The function signature itself becomes the prompt that the model receives. The return type defines the schema for structured output. Tools are simply ordinary functions whose signatures the runtime introspects. byLLM uses all of this to build the prompt automatically. |
-| **Control flow lives in prose.** Workflows, routing decisions, retry conditions, and parallelism end up inside system prompts as English, where no code can verify whether the model followed them. | The Flow primitives express workflows as graph structure. Pipelines, branches, retries, and parallel fan-outs are all visible as connections between nodes, observable by the runtime and readable by the developer. |
+| **The same intent written twice.** Tool schemas and structured-output classes have to be declared in code and described again in prompts or JSON specs, with nothing keeping the two halves in sync. | The Mind patterns keep intent in one place. The function signature itself becomes the prompt that the model receives. The return type defines the schema for structured output. Tools are simply ordinary functions whose signatures the runtime introspects. byLLM uses all of this to build the prompt automatically. |
+| **Control flow lives in prose.** Workflows, routing decisions, retry conditions, and parallelism end up inside system prompts as English, where no code can verify whether the model followed them. | The Flow patterns express workflows as graph structure. Pipelines, branches, retries, and parallel fan-outs are all visible as connections between nodes, observable by the runtime and readable by the developer. |
 | **The plumbing is rebuilt every project.** Every team writes its own ReAct loop, its own validation-and-retry, its own router, and its own threadpool, and ships its own bugs in them. | byLLM and OSP handle this plumbing in the runtime. The tool-use loop, the validation-and-retry, the routing, and the parallel fan-out are features of the language rather than code every team writes from scratch. |
 
 The agents people are actually shipping aren't here yet. The most prominent open-source projects are all in Python or TypeScript:
@@ -467,8 +467,8 @@ The agents people are actually shipping aren't here yet. The most prominent open
 - [**Hermes**](https://github.com/NousResearch/hermes-agent) (Nous Research): self-improving agent (Python)
 - [**OpenCode**](https://github.com/anomalyco/opencode): open-source coding agent (TypeScript)
 
-Those languages weren't chosen because they fit agents. They were chosen for ecosystem maturity. The cost is that every team rebuilds the same supporting code, and the codebase bloats around the missing primitives.
+Those languages weren't chosen because they fit agents. They were chosen for ecosystem maturity. The cost is that every team rebuilds the same supporting code, and the codebase bloats around the missing patterns.
 
 !!! quote ""
 
-    **With these primitives in the language, building an agent is just building the agent.**
+    **With these patterns in the language, building an agent is just building the agent.**
