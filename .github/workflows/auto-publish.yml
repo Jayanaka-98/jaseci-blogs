@@ -42,16 +42,17 @@ jobs:
 
       - name: Commit and push
         if: steps.run.outputs.count != '0'
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           slugs=$(python -c "import json; d=json.load(open('result.json')); print(', '.join(p['slug'] for p in d['published']))")
-          git add docs/blog/.schedule.yml docs/blog/posts/
-          git commit -m "auto-publish: $slugs
-
-          Triggered by hourly scheduler.
-          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          git add docs/blog/
+          git commit -m "auto-publish: $slugs" \
+                     -m "Triggered by hourly scheduler." \
+                     -m "Run: $RUN_URL"
           git push origin main
 
       - name: Job summary

@@ -157,19 +157,20 @@ jobs:
           CMD: ${{ steps.parse.outputs.cmd }}
           SLUG: ${{ steps.parse.outputs.slug != '' && steps.parse.outputs.slug || steps.slug.outputs.slug }}
           ACTOR: ${{ github.event.comment.user.login }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet; then
+          if git diff --quiet && [ -z "$(git status --porcelain docs/blog)" ]; then
             echo "committed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          git add docs/blog/.schedule.yml docs/blog/posts/ docs/blog/archived_posts/ docs/blog/unlisted/
-          git commit -m "schedule: $CMD $SLUG (via /$CMD by @$ACTOR)
-
-          PR: #${{ github.event.issue.number }}
-          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          git add docs/blog/
+          git commit -m "schedule: $CMD $SLUG (via /$CMD by @$ACTOR)" \
+                     -m "PR: #$PR_NUMBER" \
+                     -m "Run: $RUN_URL"
           git push origin main
           echo "committed=true" >> "$GITHUB_OUTPUT"
 

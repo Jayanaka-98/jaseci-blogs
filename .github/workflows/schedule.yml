@@ -53,49 +53,62 @@ jobs:
         run: pip install pyyaml
 
       - name: Validate inputs
+        env:
+          ACTION: ${{ inputs.action }}
+          PUBLISH_AT: ${{ inputs.publish_at }}
         run: |
-          if [ "${{ inputs.action }}" = "add" ] && [ -z "${{ inputs.publish_at }}" ]; then
+          if [ "$ACTION" = "add" ] && [ -z "$PUBLISH_AT" ]; then
             echo "::error::publish_at is required for action=add"
             exit 1
           fi
 
       - name: Run scheduler
         id: run
+        env:
+          ACTION:     ${{ inputs.action }}
+          SLUG:       ${{ inputs.slug }}
+          PUBLISH_AT: ${{ inputs.publish_at }}
+          NOTES:      ${{ inputs.notes }}
+          ACTOR:      ${{ github.actor }}
         run: |
           set -e
-          ARGS=(--slug "${{ inputs.slug }}" --actor "${{ github.actor }}")
-          if [ "${{ inputs.action }}" = "add" ]; then
-            ARGS+=(--publish-at "${{ inputs.publish_at }}")
-            if [ -n "${{ inputs.notes }}" ]; then
-              ARGS+=(--notes "${{ inputs.notes }}")
+          ARGS=(--slug "$SLUG" --actor "$ACTOR")
+          if [ "$ACTION" = "add" ]; then
+            ARGS+=(--publish-at "$PUBLISH_AT")
+            if [ -n "$NOTES" ]; then
+              ARGS+=(--notes "$NOTES")
             fi
           fi
-          python scripts/schedule_lib.py "${{ inputs.action }}" "${ARGS[@]}" | tee result.json
-          echo "result<<EOF" >> "$GITHUB_OUTPUT"
-          cat result.json >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          python scripts/schedule_lib.py "$ACTION" "${ARGS[@]}" | tee result.json
 
       - name: Commit changes
+        env:
+          ACTION: ${{ inputs.action }}
+          SLUG:   ${{ inputs.slug }}
+          ACTOR:  ${{ github.actor }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet; then
+          if git diff --quiet && [ -z "$(git status --porcelain docs/blog)" ]; then
             echo "No file changes produced; nothing to commit."
             exit 0
           fi
-          git add docs/blog/.schedule.yml docs/blog/posts/
-          git commit -m "schedule: ${{ inputs.action }} ${{ inputs.slug }}
-
-          Triggered by @${{ github.actor }} via workflow_dispatch.
-          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          git add docs/blog/
+          git commit -m "schedule: $ACTION $SLUG" \
+                     -m "Triggered by @$ACTOR via workflow_dispatch." \
+                     -m "Run: $RUN_URL"
           git push origin main
 
       - name: Job summary
         if: always()
+        env:
+          ACTION: ${{ inputs.action }}
+          SLUG:   ${{ inputs.slug }}
         run: |
           {
-            echo "### Schedule action: \`${{ inputs.action }}\` on \`${{ inputs.slug }}\`"
+            echo "### Schedule action: \`$ACTION\` on \`$SLUG\`"
             echo
             echo '```json'
             cat result.json 2>/dev/null || echo "{}"

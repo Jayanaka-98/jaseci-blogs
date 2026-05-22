@@ -72,7 +72,9 @@ The blog plugin only indexes `docs/blog/posts/`, so `unlist` and `archive` make 
 
 **4. "List schedulable posts" workflow.** Run it (no inputs) to dump a markdown table of every post with its draft state and active schedule entry — handy when you need to look up a slug.
 
-**5. Hourly auto-publisher.** A cron workflow runs at five-past every hour, finds entries whose `publish_at` has passed, removes `draft: true` from each post's frontmatter, rewrites its `date:` to the actual publish time, and commits. That commit triggers the existing deploy. Precision is ~1 hour.
+**5. Hourly auto-publisher.** A cron workflow runs at five-past every hour, finds entries whose `publish_at` has passed, removes `draft: true` from each post's frontmatter, and commits. That commit triggers the existing deploy. Precision is ~1 hour (GitHub-hosted cron is best-effort and can lag by 10–20 minutes under load).
+
+On a **first** publish the post's `date:` is rewritten to the actual publish day, so readers see when the post went live. On a **re-publish** (a previously-live post that was `/hide`d and is going back up), the original `date:` is preserved — RSS feeds, bookmarks, and "originally published on" attributions stay stable.
 
 Every scheduling action -- add, hold, cancel, manual publish, auto-publish -- is a real commit on `main` made by `github-actions[bot]`, so `git log docs/blog/.schedule.yml` is the full editorial history.
 

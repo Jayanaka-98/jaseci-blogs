@@ -174,6 +174,23 @@ def _find_entry(data: dict[str, Any], slug: str) -> dict[str, Any] | None:
     return None
 
 
+def _has_been_published(data: dict[str, Any], slug: str) -> bool:
+    """True if `.schedule.yml` records any prior publish for this slug.
+
+    Drives the date-preservation rule: first publish overrides `date:` to the
+    actual publish time (readers see when the post went live); subsequent
+    re-publishes preserve the original `date:` so RSS/bookmarks stay stable.
+    """
+    for entry in data["schedule"]:
+        if entry.get("slug") != slug:
+            continue
+        if entry.get("status") == "published":
+            return True
+        if entry.get("published_at"):
+            return True
+    return False
+
+
 def add(slug: str, publish_at: str, actor: str, notes: str | None = None) -> dict[str, Any]:
     post = find_post(slug)
     publish_dt = parse_iso(publish_at)
@@ -243,16 +260,21 @@ def cancel(slug: str, actor: str) -> dict[str, Any]:
 def publish_now(slug: str, actor: str) -> dict[str, Any]:
     post = find_post(slug)
     now = now_utc()
+    data = load_schedule()
+    first_publish = not _has_been_published(data, slug)
+
     post.meta.pop("draft", None)
-    post.meta["date"] = now.date().isoformat()
+    if first_publish or post.meta.get("date") is None:
+        post.meta["date"] = now.date().isoformat()
+    # else: preserve the existing date so re-publishes don't reset RSS/bookmarks
     post.write()
 
-    data = load_schedule()
     entry = _find_entry(data, slug)
     if entry is not None:
         entry["status"] = "published"
         entry["published_at"] = iso(now)
         entry["published_by"] = actor
+        entry["first_publish"] = first_publish
         entry.pop("publish_at", None)
     else:
         data["schedule"].append({
@@ -260,10 +282,17 @@ def publish_now(slug: str, actor: str) -> dict[str, Any]:
             "status": "published",
             "published_at": iso(now),
             "published_by": actor,
+            "first_publish": first_publish,
         })
         entry = data["schedule"][-1]
     save_schedule(data)
-    return {"ok": True, "action": "publish-now", "entry": entry, "post": str(post.path.relative_to(REPO_ROOT))}
+    return {
+        "ok": True,
+        "action": "publish-now",
+        "entry": entry,
+        "first_publish": first_publish,
+        "post": str(post.path.relative_to(REPO_ROOT)),
+    }
 
 
 def takedown(slug: str, destination: str, actor: str, reason: str | None = None) -> dict[str, Any]:
@@ -339,14 +368,22 @@ def publish_due(actor: str = "auto-publisher") -> dict[str, Any]:
         except UserError as e:
             errors.append({"slug": slug, "error": str(e)})
             continue
+        first_publish = not _has_been_published(data, slug)
         post.meta.pop("draft", None)
-        post.meta["date"] = now.date().isoformat()
+        if first_publish or post.meta.get("date") is None:
+            post.meta["date"] = now.date().isoformat()
+        # else: preserve existing date (re-publish of a previously-live post)
         post.write()
         entry["status"] = "published"
         entry["published_at"] = iso(now)
         entry["published_by"] = actor
+        entry["first_publish"] = first_publish
         entry.pop("publish_at", None)
-        published.append({"slug": slug, "post": str(post.path.relative_to(REPO_ROOT))})
+        published.append({
+            "slug": slug,
+            "post": str(post.path.relative_to(REPO_ROOT)),
+            "first_publish": first_publish,
+        })
 
     if published:
         save_schedule(data)

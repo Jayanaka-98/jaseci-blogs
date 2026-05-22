@@ -10,11 +10,14 @@ name: Lint new posts
 # Modified existing posts are NOT checked here — auto-publisher commits
 # legitimately remove `draft: true`.
 
+#
+# Runs on every PR (no path filter) so this check can be marked "required" in
+# branch protection without leaving unrelated PRs hanging on a missing status.
+# When no posts were added the check passes trivially.
+
 on:
   pull_request:
     branches: [main]
-    paths:
-      - "docs/blog/posts/**"
 
 permissions:
   contents: read
@@ -37,25 +40,33 @@ jobs:
 
       - name: Collect newly added posts
         id: added
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -e
-          BASE="${{ github.event.pull_request.base.sha }}"
-          HEAD="${{ github.event.pull_request.head.sha }}"
-          ADDED=$(git diff --name-only --diff-filter=A "$BASE" "$HEAD" -- 'docs/blog/posts/*.md' || true)
-          echo "Newly added post files in this PR:"
-          echo "$ADDED"
+          ADDED=$(git diff --name-only --diff-filter=A "$BASE_SHA" "$HEAD_SHA" -- 'docs/blog/posts/*.md' || true)
+          if [ -z "$ADDED" ]; then
+            echo "No new posts added in this PR — lint passes trivially."
+          else
+            echo "Newly added post files:"
+            echo "$ADDED"
+          fi
           {
             echo "files<<EOF"
             echo "$ADDED"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Enforce draft: true on new posts
+      - name: Enforce draft on new posts
         if: steps.added.outputs.files != ''
+        env:
+          FILES: ${{ steps.added.outputs.files }}
         run: |
           set -e
+          # FILES is newline-separated; word-splitting on whitespace gives the arg list.
           # shellcheck disable=SC2086
-          python scripts/schedule_lib.py lint-new-posts ${{ steps.added.outputs.files }} | tee result.json
+          python scripts/schedule_lib.py lint-new-posts $FILES | tee result.json
 
       - name: Post-fail explainer
         if: failure()
