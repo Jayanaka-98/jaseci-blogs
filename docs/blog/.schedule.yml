@@ -25,4 +25,76 @@
 #       added_at: <ISO 8601 UTC, set by the workflow>
 #       notes: <free text, optional>
 
-schedule: []
+schedule:
+- slug: browser-automation-walkers-fix-it
+  status: published
+  published_at: '2026-03-14T00:58:27Z'
+  published_by: backfill
+  first_publish: true
+  notes: Backfilled from git history; original publish predates the editorial scheduler.
+- slug: building-agentic-ai-with-jac
+  status: published
+  published_at: '2026-05-14T01:28:57Z'
+  published_by: backfill
+  first_publish: true
+  notes: Backfilled from git history; original publish predates the editorial scheduler.
+- slug: building-protomcp
+  status: published
+  published_at: '2026-03-16T15:21:55Z'
+  published_by: backfill
+  first_publish: true
+  notes: Backfilled from git history; original publish predates the editorial scheduler.
+- slug: dataclasses-and-jac-objects
+  status: published
+  published_at: '2025-11-14T03:31:00Z'
+  published_by: backfill
+  first_publish: true
+  notes: Backfilled from git history; original publish predates the editorial scheduler.
+- slug: four-things-object-spatial-programming
+  status: published
+  published_at: '2025-11-14T03:31:00Z'
+  published_by: backfill
+  first_publish: true
+  notes: Backfilled from git history; original publish predates the editorial scheduler.
+- slug: jac-vs-sota-todo-app
+  status: published
+  published_at: '2026-04-09T22:04:49Z'
+  published_by: backfill
+  first_publish: true
+  notes: Backfilled from git history; original publish predates the editorial scheduler.
+- slug: python-getting-jacd
+  status: published
+  published_at: '2025-11-14T03:31:00Z'
+  published_by: backfill
+  first_publish: true
+  notes: Backfilled from git history; original publish predates the editorial scheduler.
+- slug: making-jac-scale-traversals-faster
+  status: published
+  published_at: '2026-04-10T11:44:08Z'
+  published_by: backfill
+  first_publish: true
+  notes: Backfilled from git history; original publish predates the editorial scheduler.
+- slug: nairobi-ai-jaseci-ouk
+  status: published
+  published_at: '2026-02-24T15:21:50Z'
+  published_by: backfill
+  first_publish: true
+  notes: Backfilled from git history; original publish predates the editorial scheduler.
+- slug: nairobi-hackathon-feedback
+  status: published
+  published_at: '2026-03-12T06:15:49Z'
+  published_by: backfill
+  first_publish: true
+  notes: Backfilled from git history; original publish predates the editorial scheduler.
+- slug: socratic-prompt-method
+  status: published
+  published_at: '2026-03-10T20:00:14Z'
+  published_by: backfill
+  first_publish: true
+  notes: Backfilled from git history; original publish predates the editorial scheduler.
+- slug: why-jac-client-should-drop-meta-packages
+  status: published
+  published_at: '2026-03-31T11:49:31Z'
+  published_by: backfill
+  first_publish: true
+  notes: Backfilled from git history; original publish predates the editorial scheduler.
