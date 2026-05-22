@@ -1,0 +1,67 @@
+name: Auto-publish scheduled posts
+
+# Runs hourly. Reads docs/blog/.schedule.yml, finds entries whose publish_at
+# has passed, removes `draft: true` from each target post, marks the entry
+# as published, and commits. The resulting commit to `main` triggers the
+# normal deploy workflow.
+
+on:
+  schedule:
+    - cron: "5 * * * *"   # five-past every hour, UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: schedule-mutation
+  cancel-in-progress: false
+
+jobs:
+  publish-due:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Publish due entries
+        id: run
+        run: |
+          set -e
+          python scripts/schedule_lib.py publish-due --actor "auto-publisher" | tee result.json
+          published_count=$(python -c "import json; d=json.load(open('result.json')); print(len(d.get('published', [])))")
+          echo "count=$published_count" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push
+        if: steps.run.outputs.count != '0'
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          slugs=$(python -c "import json; d=json.load(open('result.json')); print(', '.join(p['slug'] for p in d['published']))")
+          git add docs/blog/
+          git commit -m "auto-publish: $slugs" \
+                     -m "Triggered by hourly scheduler." \
+                     -m "Run: $RUN_URL"
+          git push origin main
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "### Auto-publish run"
+            echo
+            echo '```json'
+            cat result.json 2>/dev/null || echo "{}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
