@@ -36,6 +36,47 @@ We'll review all submissions and happily accept anything that's insightful or ot
 5. If you need images (e.g., screenshots of what you built), place them in `docs/assets/` and keep file sizes reasonable -- aim for under 100KB per image when possible. Compress PNGs/JPGs before committing
 6. Open a pull request
 
+> **Note on publish timing:** an editor decides when your post goes live. If you'd like it held until a specific date, just say so in the PR description -- don't put `draft: true` in your frontmatter yourself, the editorial workflow handles that. See [Editorial Scheduling](#editorial-scheduling) for how it works.
+
+### Editorial Scheduling
+
+Posts are not published the instant they merge. An editor schedules each post for a specific UTC publish time. The source of truth is [docs/blog/.schedule.yml](docs/blog/.schedule.yml), and there are three ways for editors to drive it -- none require cloning the repo:
+
+**1. Slash-commands on the PR.** Right in the PR conversation:
+
+```
+/schedule 2026-06-01T14:00:00Z
+/schedule 2026-06-01T14:00:00Z waiting on marketing
+/hold
+/cancel
+/publish-now
+/hide outdated benchmarks, will revisit       (draft in place — reversible)
+/unlist author asked to retract               (move to unlisted/)
+/archive superseded by 2026 retrospective     (move to archived_posts/)
+```
+
+The post's slug is inferred from the PR's changed files. To target a different post from any PR, append `slug=<name>`.
+
+**2. "Schedule a post" workflow.** Under the repo's **Actions** tab, run the *Schedule a post* workflow. It's a form with `action` (add / hold / cancel / publish-now), `slug`, `publish_at`, and `notes` inputs. Use this for posts that have already merged.
+
+**3. "Take down a post" workflow.** Also under the Actions tab. Pulls a live post off the site with a `destination` choice:
+
+| Destination | What it does | Use when |
+|---|---|---|
+| `draft` | Sets `draft: true` in the post's frontmatter, file stays in `docs/blog/posts/` | Temporary hide. Easy to re-publish with `/publish-now`. |
+| `unlist` | Moves the file to `docs/blog/unlisted/` and adds `draft: true` defensively | You may revisit it but don't want it anywhere near the live site. |
+| `archive` | Moves the file to `docs/blog/archived_posts/` | Permanently retired (outdated, superseded by another post). |
+
+The blog plugin only indexes `docs/blog/posts/`, so `unlist` and `archive` make the post invisible by location, not by frontmatter — there's no way it can accidentally render.
+
+**4. "List schedulable posts" workflow.** Run it (no inputs) to dump a markdown table of every post with its draft state and active schedule entry — handy when you need to look up a slug.
+
+**5. Hourly auto-publisher.** A cron workflow runs at five-past every hour, finds entries whose `publish_at` has passed, removes `draft: true` from each post's frontmatter, rewrites its `date:` to the actual publish time, and commits. That commit triggers the existing deploy. Precision is ~1 hour.
+
+Every scheduling action -- add, hold, cancel, manual publish, auto-publish -- is a real commit on `main` made by `github-actions[bot]`, so `git log docs/blog/.schedule.yml` is the full editorial history.
+
+Anyone with write access on the repo can run these. The slash-command workflow additionally checks `author_association` so random PR commenters can't trigger it.
+
 ### Adding Yourself as an Author
 
 If you're a new contributor, add yourself to `docs/blog/.authors.yml`:

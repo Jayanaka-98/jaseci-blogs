@@ -1,0 +1,28 @@
+# Editorial publish calendar for blogs.jaseci.org
+#
+# This file is maintained by the scheduling workflows (do not hand-edit unless
+# you know what you're doing). It is the source of truth for what is queued
+# to publish and when.
+#
+# Each entry corresponds to a post in docs/blog/posts/<slug>.md whose
+# frontmatter has draft: true. The hourly auto-publish workflow watches this
+# file and, when an entry's publish_at time has passed:
+#   1. removes draft: true from the post's frontmatter
+#   2. rewrites the post's `date:` to the actual publish time (UTC)
+#   3. marks the schedule entry as published
+#   4. commits the change, which triggers a normal deploy
+#
+# To add/hold/cancel/publish-now an entry, use the GitHub Actions tab
+# ("Schedule a post" workflow) or `/schedule`, `/hold`, `/cancel`,
+# `/publish-now` slash-commands on the post's PR.
+#
+# Schema:
+#   schedule:
+#     - slug: <matches the `slug:` frontmatter of the target post>
+#       publish_at: <ISO 8601 UTC datetime, e.g. 2026-06-01T14:00:00Z>
+#       status: scheduled | held | published | cancelled
+#       added_by: <github login, set by the workflow>
+#       added_at: <ISO 8601 UTC, set by the workflow>
+#       notes: <free text, optional>
+
+schedule: []

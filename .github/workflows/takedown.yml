@@ -1,0 +1,100 @@
+name: Take down a post
+
+# Pull a post off the live site. Choose between three destinations:
+#
+#   archive — move to docs/blog/archived_posts/. Use for posts that were
+#             live but are being permanently retired (outdated, superseded).
+#
+#   unlist  — move to docs/blog/unlisted/ AND set draft: true. Use for posts
+#             you may revisit later but don't want anywhere near the site.
+#
+#   draft   — leave the file in docs/blog/posts/, just add draft: true.
+#             Use for temporary, reversible hides (re-publish later via the
+#             Schedule a post workflow or /publish-now).
+#
+# Either way, the change is committed to main and triggers a normal deploy.
+
+on:
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: Slug of the post to take down (see "List schedulable posts" if unsure)
+        type: string
+        required: true
+      destination:
+        description: Where to send it
+        type: choice
+        required: true
+        default: draft
+        options:
+          - draft
+          - unlist
+          - archive
+      reason:
+        description: Why (recorded in .schedule.yml for the audit trail)
+        type: string
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: schedule-mutation
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Take down
+        id: run
+        run: |
+          set -e
+          ARGS=(
+            --slug "${{ inputs.slug }}"
+            --destination "${{ inputs.destination }}"
+            --actor "${{ github.actor }}"
+          )
+          if [ -n "${{ inputs.reason }}" ]; then
+            ARGS+=(--reason "${{ inputs.reason }}")
+          fi
+          python scripts/schedule_lib.py takedown "${ARGS[@]}" | tee result.json
+
+      - name: Commit changes
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet && [ -z "$(git status --porcelain)" ]; then
+            echo "No file changes produced; nothing to commit."
+            exit 0
+          fi
+          git add docs/blog/.schedule.yml docs/blog/posts/ docs/blog/archived_posts/ docs/blog/unlisted/
+          git commit -m "takedown(${{ inputs.destination }}): ${{ inputs.slug }}
+
+          Triggered by @${{ github.actor }} via workflow_dispatch.
+          Reason: ${{ inputs.reason }}
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          git push origin main
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "### Takedown: \`${{ inputs.slug }}\` → \`${{ inputs.destination }}\`"
+            echo
+            echo '```json'
+            cat result.json 2>/dev/null || echo "{}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

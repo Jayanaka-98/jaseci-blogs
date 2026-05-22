@@ -1,0 +1,103 @@
+name: Schedule a post
+
+# Editorial scheduling form. Anyone with write access to the repo can run this
+# from the Actions tab. It updates docs/blog/.schedule.yml and the target
+# post's frontmatter, then commits the change to main.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: What to do
+        type: choice
+        required: true
+        default: add
+        options:
+          - add
+          - hold
+          - cancel
+          - publish-now
+      slug:
+        description: Post slug (matches `slug:` frontmatter, or filename without .md)
+        type: string
+        required: true
+      publish_at:
+        description: ISO 8601 UTC datetime (only for `add`, e.g. 2026-06-01T14:00:00Z)
+        type: string
+        required: false
+      notes:
+        description: Optional notes (only for `add`)
+        type: string
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: schedule-mutation
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Validate inputs
+        run: |
+          if [ "${{ inputs.action }}" = "add" ] && [ -z "${{ inputs.publish_at }}" ]; then
+            echo "::error::publish_at is required for action=add"
+            exit 1
+          fi
+
+      - name: Run scheduler
+        id: run
+        run: |
+          set -e
+          ARGS=(--slug "${{ inputs.slug }}" --actor "${{ github.actor }}")
+          if [ "${{ inputs.action }}" = "add" ]; then
+            ARGS+=(--publish-at "${{ inputs.publish_at }}")
+            if [ -n "${{ inputs.notes }}" ]; then
+              ARGS+=(--notes "${{ inputs.notes }}")
+            fi
+          fi
+          python scripts/schedule_lib.py "${{ inputs.action }}" "${ARGS[@]}" | tee result.json
+          echo "result<<EOF" >> "$GITHUB_OUTPUT"
+          cat result.json >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Commit changes
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "No file changes produced; nothing to commit."
+            exit 0
+          fi
+          git add docs/blog/.schedule.yml docs/blog/posts/
+          git commit -m "schedule: ${{ inputs.action }} ${{ inputs.slug }}
+
+          Triggered by @${{ github.actor }} via workflow_dispatch.
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          git push origin main
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "### Schedule action: \`${{ inputs.action }}\` on \`${{ inputs.slug }}\`"
+            echo
+            echo '```json'
+            cat result.json 2>/dev/null || echo "{}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
