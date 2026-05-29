@@ -172,16 +172,27 @@ def:priv extract_peek_markdown(body: str) -> str {
     after = body.split(EXCERPT_MARKER, 1)[1];
     kept: list[str] = [];
     non_blank = 0;
+    in_fence = False;
     for raw in after.split("\n") {
         line = raw.rstrip();
         stripped = line.strip();
+        # Skip fenced code blocks entirely — a partial fence renders as raw
+        # "```" text in the teaser, and code is noise in a prose peek anyway.
+        if stripped.startswith("```") or stripped.startswith("~~~") {
+            in_fence = not in_fence;
+            continue;
+        }
+        if in_fence {
+            continue;
+        }
         if not stripped {
             if kept {
                 kept.append("");
             }
             continue;
         }
-        if stripped.startswith("---") or stripped.startswith("#") or stripped.startswith("<!--") {
+        # Skip structural noise and HTML/markup-only lines.
+        if stripped.startswith("---") or stripped.startswith("#") or stripped.startswith("<!--") or stripped.startswith("<") {
             continue;
         }
         kept.append(line);

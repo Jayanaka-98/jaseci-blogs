@@ -133,17 +133,60 @@ async def load_script(src: str) -> None {
 }
 
 
-def enhance_code_blocks(container: any) -> None {
-    blocks = container.querySelectorAll("pre > code");
-    for code_el in blocks {
-        pre = code_el.parentElement;
+def display_lang(lang: str) -> str {
+    low = lang.lower();
+    if low == "jac" {
+        return "Jac";
+    }
+    if low == "python" or low == "py" {
+        return "Python";
+    }
+    if not lang {
+        return "Code";
+    }
+    return lang[0:1].upper() + lang[1:];
+}
+
+
+async def enhance_code_blocks(container: any) -> None {
+    # Render every static code block through CodeMirror too (read-only), so
+    # colors, line numbers, and chrome match the runnable editor exactly.
+    pres = container.querySelectorAll("pre");
+    targets = [];
+    for pre in pres {
         if pre.dataset.enhanced {
             continue;
         }
+        if pre.closest("div.runnable-jac") or pre.closest("div.code-block") {
+            continue;
+        }
+        code_el = pre.querySelector("code") or pre;
+        cls_str = str(code_el.className) + " " + str(pre.className);
+        if "language-mermaid" in cls_str or "mermaid" in cls_str {
+            continue;
+        }
+        targets.append(pre);
+    }
+    has_any = False;
+    for _t in targets {
+        has_any = True;
+        break;
+    }
+    if not has_any {
+        return;
+    }
+    await ensure_codemirror();
+    if not window.CodeMirror {
+        return;
+    }
+
+    for pre in targets {
         pre.dataset.enhanced = "true";
+        code_el = pre.querySelector("code") or pre;
+        source = str(code_el.textContent).rstrip("\n");
 
         lang = "";
-        classes = code_el.className.split(" ");
+        classes = (str(code_el.className) + " " + str(pre.className)).split(" ");
         for raw_cls in classes {
             cls: str = str(raw_cls);
             if cls.startswith("language-") {
@@ -151,59 +194,51 @@ def enhance_code_blocks(container: any) -> None {
                 break;
             }
         }
-        if lang == "mermaid" {
-            continue;
-        }
 
         shell = document.createElement("div");
-        shell.className = "code-shell";
-        pre.parentNode.insertBefore(shell, pre);
-        shell.appendChild(pre);
+        shell.className = "runnable-jac code-static";
 
         header = document.createElement("div");
-        header.className = "code-shell-header";
-        if lang {
-            tag = document.createElement("span");
-            tag.className = "code-lang";
-            tag.textContent = lang;
-            header.appendChild(tag);
-        }
+        header.className = "runnable-header";
+        tag = document.createElement("span");
+        tag.className = "code-lang";
+        tag.textContent = display_lang(lang);
+        header.appendChild(tag);
         copy_btn = document.createElement("button");
         copy_btn.type = "button";
-        copy_btn.className = "code-copy";
+        copy_btn.className = "runnable-copy";
         copy_btn.textContent = "Copy";
-        copy_btn.addEventListener("click", lambda -> None {
-            try {
-                copy_text(code_el.textContent);
-                copy_btn.textContent = "Copied";
-                setTimeout(lambda -> None { copy_btn.textContent = "Copy"; }, 1500);
-            } except Exception {
-                _ignore = None;
-            }
-        });
         header.appendChild(copy_btn);
-        shell.insertBefore(header, pre);
+        shell.appendChild(header);
 
-        line_count = len(code_el.textContent.split("\n"));
-        if line_count > 14 {
-            shell.classList.add("code-shell-collapsible");
-            shell.classList.add("code-shell-collapsed");
-            toggle = document.createElement("button");
-            toggle.type = "button";
-            toggle.className = "code-shell-toggle";
-            toggle.textContent = f"Show all {line_count} lines";
-            toggle.addEventListener("click", lambda -> None {
-                is_collapsed = shell.classList.contains("code-shell-collapsed");
-                if is_collapsed {
-                    shell.classList.remove("code-shell-collapsed");
-                    toggle.textContent = "Collapse";
-                } else {
-                    shell.classList.add("code-shell-collapsed");
-                    toggle.textContent = f"Show all {line_count} lines";
-                }
-            });
-            shell.appendChild(toggle);
+        host = document.createElement("div");
+        host.className = "runnable-editor-host";
+        shell.appendChild(host);
+
+        # Replace the whole codehilite wrapper (<div class="highlight">) if
+        # present — otherwise just the <pre> — so we don't nest the editor
+        # inside the wrapper's own border/background (the "double box").
+        outer = pre.closest("div.highlight") or pre;
+        outer.parentNode.insertBefore(shell, outer);
+        outer.parentNode.removeChild(outer);
+
+        has_jac = False;
+        try {
+            has_jac = bool(window.CodeMirror.modes["jac"]);
+        } except Exception {
+            _ignore = None;
         }
+        cm_mode = "jac" if (lang.lower() == "jac" or not lang) and has_jac else ("python" if lang.lower() in ["python", "py", "jac", ""] else lang);
+        cm = window.CodeMirror(host, {
+            "value": source,
+            "mode": cm_mode,
+            "theme": "default",
+            "lineNumbers": True,
+            "readOnly": True,
+            "viewportMargin": 100000,
+        });
+        copy_btn.addEventListener("click", make_copier(cm, copy_btn));
+        setTimeout(lambda -> None { cm.refresh(); }, 60);
     }
 }
 
@@ -418,9 +453,6 @@ async def mount_runnable_blocks(container: any) -> None {
     if not window.CodeMirror {
         return;
     }
-    theme = document.documentElement.getAttribute("data-theme") or "light";
-    cm_theme = "material-darker" if theme == "dark" else "default";
-
     for block in blocks {
         # Re-check the flag at processing time: the effect can run twice
         # (React StrictMode in dev), and both invocations capture the same
@@ -445,13 +477,22 @@ async def mount_runnable_blocks(container: any) -> None {
         header.className = "runnable-header";
         lang_el = document.createElement("span");
         lang_el.className = "code-lang";
-        lang_el.textContent = lang;
+        lang_el.textContent = display_lang(str(lang));
         header.appendChild(lang_el);
+
+        actions = document.createElement("div");
+        actions.className = "runnable-actions";
+        copy_btn = document.createElement("button");
+        copy_btn.type = "button";
+        copy_btn.className = "runnable-copy";
+        copy_btn.textContent = "Copy";
+        actions.appendChild(copy_btn);
         run_btn = document.createElement("button");
         run_btn.type = "button";
         run_btn.className = "runnable-run";
         run_btn.textContent = "▶ Run";
-        header.appendChild(run_btn);
+        actions.appendChild(run_btn);
+        header.appendChild(actions);
         block.appendChild(header);
 
         host = document.createElement("div");
@@ -470,7 +511,7 @@ async def mount_runnable_blocks(container: any) -> None {
         cm = window.CodeMirror(host, {
             "value": source,
             "mode": cm_mode,
-            "theme": cm_theme,
+            "theme": "default",
             "lineNumbers": True,
             "indentUnit": 4,
             "viewportMargin": 100000,
@@ -483,8 +524,23 @@ async def mount_runnable_blocks(container: any) -> None {
         output.className = "runnable-output";
         block.appendChild(output);
 
+        copy_btn.addEventListener("click", make_copier(cm, copy_btn));
         run_btn.addEventListener("click", make_runner(cm, output, run_btn, str(lang)));
     }
+}
+
+
+def make_copier(cm: any, copy_btn: any) -> any {
+    def handler() -> None {
+        try {
+            copy_text(str(cm.getValue()));
+            copy_btn.textContent = "Copied ✓";
+            setTimeout(lambda -> None { copy_btn.textContent = "Copy"; }, 1500);
+        } except Exception {
+            _ignore = None;
+        }
+    }
+    return handler;
 }
 
 
@@ -529,7 +585,7 @@ def:pub PostBody(html: str) -> JsxElement {
             _ignore = None;
         }
         try {
-            enhance_code_blocks(container);
+            await enhance_code_blocks(container);
         } except Exception {
             _ignore = None;
         }

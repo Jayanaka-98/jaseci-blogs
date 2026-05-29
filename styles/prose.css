@@ -380,6 +380,61 @@
 .runnable-editor-host .CodeMirror-lines {
     padding: 0.75rem 0;
 }
+/* Static (read-only) blocks: no caret. */
+.code-static .runnable-editor-host .CodeMirror-cursors {
+    display: none;
+}
+
+/* Token colors — matched to the pygments palette used for any non-CM code so
+   highlighting is identical everywhere. Light theme. */
+.runnable-editor-host .cm-comment { color: #8a857b; font-style: italic; }
+.runnable-editor-host .cm-keyword { color: #b54a1a; font-weight: 600; }
+.runnable-editor-host .cm-atom { color: #b54a1a; }
+.runnable-editor-host .cm-string,
+.runnable-editor-host .cm-string-2 { color: #5d7a3c; }
+.runnable-editor-host .cm-number { color: #8b5a2b; }
+.runnable-editor-host .cm-def { color: #1f6688; }
+.runnable-editor-host .cm-variable-2 { color: #1f6688; }
+.runnable-editor-host .cm-builtin { color: #b54a1a; }
+.runnable-editor-host .cm-operator { color: var(--text); }
+.runnable-editor-host .cm-meta { color: #8a857b; }
+.runnable-editor-host .cm-property { color: var(--text); }
+
+/* Dark theme token colors. */
+[data-theme="dark"] .runnable-editor-host .cm-comment { color: #6a655c; }
+[data-theme="dark"] .runnable-editor-host .cm-keyword { color: #e07b3f; }
+[data-theme="dark"] .runnable-editor-host .cm-atom { color: #e07b3f; }
+[data-theme="dark"] .runnable-editor-host .cm-string,
+[data-theme="dark"] .runnable-editor-host .cm-string-2 { color: #9bbf6a; }
+[data-theme="dark"] .runnable-editor-host .cm-number { color: #d4a574; }
+[data-theme="dark"] .runnable-editor-host .cm-def { color: #6cb3d6; }
+[data-theme="dark"] .runnable-editor-host .cm-variable-2 { color: #6cb3d6; }
+[data-theme="dark"] .runnable-editor-host .cm-builtin { color: #e07b3f; }
+[data-theme="dark"] .runnable-editor-host .cm-meta { color: #6a655c; }
+
+/* Header actions: copy (+ run for runnable). */
+.runnable-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.runnable-copy {
+    background: transparent;
+    border: 1px solid var(--code-border);
+    color: var(--text-muted);
+    padding: 0.375rem 0.875rem;
+    border-radius: 999px;
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+.runnable-copy:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}
 .runnable-fallback {
     width: 100%;
     min-height: 9rem;
