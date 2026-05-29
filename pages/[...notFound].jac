@@ -11,7 +11,7 @@ cl {
             <h1 className="display">Lost your way?</h1>
             <p className="post-deck">The page you're looking for doesn't exist. It may have been retired, renamed, or never published.</p>
             <p style={{"marginTop": "2rem"}}>
-                <Link className="cta-pill" to="/">← Back to latest</Link>
+                <Link className="cta-pill" to="/blog">← Back to latest</Link>
             </p>
         </section>;
     }

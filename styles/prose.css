@@ -301,6 +301,17 @@
     max-width: 100%;
     height: auto;
 }
+/* Both palettes are rendered into the block up front; show only the one that
+   matches the active theme so toggling is instant (see render_mermaid_blocks). */
+.mermaid-variant-dark {
+    display: none;
+}
+:root[data-theme="dark"] .mermaid-variant-light {
+    display: none;
+}
+:root[data-theme="dark"] .mermaid-variant-dark {
+    display: block;
+}
 
 /* Runnable Jac block */
 .prose .runnable-jac {
@@ -343,9 +354,31 @@
     cursor: progress;
     transform: none;
 }
-.runnable-editor {
-    min-height: 9rem;
+/* CodeMirror editor inside a runnable block — real editing + syntax colors. */
+.runnable-editor-host {
     background: var(--code-bg);
+}
+.runnable-editor-host .CodeMirror {
+    height: auto;
+    background: transparent;
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    line-height: 1.55;
+    color: var(--text);
+}
+.runnable-editor-host .CodeMirror-gutters {
+    background: transparent;
+    border-right: 1px solid var(--code-border);
+}
+.runnable-editor-host .CodeMirror-linenumber {
+    color: var(--text-muted);
+    opacity: 0.6;
+}
+.runnable-editor-host .CodeMirror-cursor {
+    border-left-color: var(--accent);
+}
+.runnable-editor-host .CodeMirror-lines {
+    padding: 0.75rem 0;
 }
 .runnable-fallback {
     width: 100%;

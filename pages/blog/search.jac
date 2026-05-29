@@ -167,7 +167,7 @@ cl {
             <ul className="search-results">
                 {[
                     <li key={r["slug"]} className="search-result">
-                        <Link to={f"/posts/{r['slug']}"}>
+                        <Link to={f"/blog/posts/{r['slug']}"}>
                             <p
                                 className="search-result-title"
                                 dangerouslySetInnerHTML={{"__html": highlight(str(r["title"]), q)}}

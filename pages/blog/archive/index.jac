@@ -76,7 +76,7 @@ cl {
                         <ul style={{"listStyle": "none", "padding": "0", "margin": "0"}}>
                             {[
                                 <li key={p["slug"]}>
-                                    <Link to={f"/posts/{p['slug']}"} className="archive-item">
+                                    <Link to={f"/blog/posts/{p['slug']}"} className="archive-item">
                                         <span className="archive-date">{p["date_short"]}</span>
                                         <span className="archive-title">{p["title"]}</span>
                                     </Link>

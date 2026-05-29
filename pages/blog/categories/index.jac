@@ -66,7 +66,7 @@ cl {
             <ul className="category-grid">
                 {[
                     <li key={c["name"]}>
-                        <Link to={f"/categories/{c['name']}"} className="category-tile">
+                        <Link to={f"/blog/categories/{c['name']}"} className="category-tile">
                             <p className="category-name">{c["name"]}</p>
                             <p className="category-count">{c["count"]} post{c["count"] == 1 and "" or "s"}</p>
                         </Link>

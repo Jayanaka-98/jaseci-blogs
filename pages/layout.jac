@@ -42,23 +42,24 @@ cl {
 
             <header className="site-header">
                 <div className="container header-inner">
-                    <a href="https://www.jaseci.org" className="brand" aria-label="Jaseci.org" rel="noopener">
-                        <img src="/logo.png" alt="" width={32} height={32} className="brand-logo" />
+                    <Link to="/blog" className="brand">
+                        <img src="https://www.jaseci.org/images/logo.png" alt="Jaseci" width={32} height={32} className="brand-logo" />
                         <span className="brand-text">
                             <span className="brand-mark">Jaseci</span>
                             <span className="brand-sub">Blogs</span>
                         </span>
-                    </a>
+                    </Link>
 
                     <nav className="primary-nav" aria-label="Primary">
-                        <Link to="/">Latest</Link>
-                        <Link to="/archive">Archive</Link>
-                        <Link to="/categories">Categories</Link>
+                        <Link to="/blog">Latest</Link>
+                        <Link to="/blog/archive">Archive</Link>
+                        <Link to="/blog/categories">Categories</Link>
                         <a href="https://newsletter.jaseci.org" target="_blank" rel="noopener">Newsletter</a>
+                        <a href="https://www.jaseci.org" target="_blank" rel="noopener" className="nav-jaseci">Jaseci.org</a>
                     </nav>
 
                     <div className="header-actions">
-                        <Link to="/search" className="icon-btn" aria-label="Search">
+                        <Link to="/blog/search" className="icon-btn" aria-label="Search">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <circle cx="11" cy="11" r="7" />
                                 <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -108,7 +109,7 @@ cl {
             <footer className="site-footer">
                 <div className="container footer-grid">
                     <div className="footer-brand">
-                        <img src="/logo.png" alt="" width={40} height={40} />
+                        <img src="https://www.jaseci.org/images/logo.png" alt="" width={40} height={40} />
                         <div>
                             <p className="footer-title">Jaseci Blogs</p>
                             <p className="footer-tagline muted">Engineering writing from the Jaseci & Jac open-source ecosystem.</p>
@@ -117,9 +118,9 @@ cl {
                     <nav className="footer-nav" aria-label="Footer">
                         <div>
                             <p className="eyebrow">Read</p>
-                            <Link to="/">Latest posts</Link>
-                            <Link to="/archive">Archive</Link>
-                            <Link to="/categories">Categories</Link>
+                            <Link to="/blog">Latest posts</Link>
+                            <Link to="/blog/archive">Archive</Link>
+                            <Link to="/blog/categories">Categories</Link>
                         </div>
                         <div>
                             <p className="eyebrow">Jaseci</p>
@@ -132,6 +133,20 @@ cl {
                 </div>
                 <div className="container footer-bottom">
                     <p className="muted small">© 2026 Jaseci Labs. Part of the Jaseci open-source ecosystem.</p>
+                    <a
+                        className="built-with-jaseci"
+                        href="https://www.jaseci.org"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        <span>Built with</span>
+                        <img
+                            src="https://www.jaseci.org/images/logo.png"
+                            alt="Jaseci logo"
+                            className="built-with-jaseci-logo"
+                        />
+                        <span className="built-with-jaseci-wordmark">JASECI</span>
+                    </a>
                 </div>
             </footer>
         </>;

@@ -15,9 +15,13 @@ with `_` are skipped (templates).
 import os;
 import re;
 import yaml;
+import base64;
 import markdown as md;
 import from datetime { date as date_cls }
 import from pathlib { Path }
+
+
+glob JACLANG_ZIP = "docs/playground/jaclang.zip";
 
 
 cl {
@@ -29,7 +33,7 @@ cl {
                 icon = document.createElement("link");
                 icon.rel = "icon";
                 icon.type = "image/png";
-                icon.href = "/logo.png";
+                icon.href = "https://www.jaseci.org/images/logo.png";
                 document.head.appendChild(icon);
             }
         }
@@ -628,5 +632,26 @@ walker:pub GetSearchIndex {
             });
         }
         report {"ok": True, "documents": index};
+    }
+}
+
+
+walker:pub GetRuntimeZip {
+    # Serves the prebuilt jaclang.zip as base64 for the in-browser Pyodide
+    # runner. Delivered via walker (not static) because the dev/static server
+    # doesn't serve arbitrary public/ files and filters non-image extensions.
+    can get with Root entry {
+        path = Path(JACLANG_ZIP);
+        if not path.exists() {
+            report {"ok": False, "error": "runtime bundle not found"};
+            return;
+        }
+        try {
+            data = path.read_bytes();
+            b64 = base64.b64encode(data).decode("ascii");
+            report {"ok": True, "b64": b64};
+        } except Exception as e {
+            report {"ok": False, "error": str(e)};
+        }
     }
 }
