@@ -602,6 +602,18 @@ def setup_toc_scrollspy() -> None {
         if not toc_el {
             return;
         }
+        # Hide the TOC once the article body has scrolled out of view, so it
+        # doesn't overlay the related-posts grid / prev-next nav / footer.
+        prose_el = document.querySelector(".post-shell .prose");
+        if prose_el {
+            rect = prose_el.getBoundingClientRect();
+            past_article = rect.bottom < 160;
+            if past_article {
+                toc_el.classList.add("post-toc-hidden");
+            } else {
+                toc_el.classList.remove("post-toc-hidden");
+            }
+        }
         links = toc_el.querySelectorAll("a[data-toc-id]");
         current = "";
         for ln in links {

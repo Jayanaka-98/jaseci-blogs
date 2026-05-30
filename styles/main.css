@@ -345,6 +345,12 @@ img {
     max-height: calc(100vh - 11rem);
     overflow-y: auto;
     z-index: 5;
+    opacity: 1;
+    transition: opacity 0.2s ease;
+}
+.post-toc.post-toc-hidden {
+    opacity: 0;
+    pointer-events: none;
 }
 .post-toc-title {
     font-family: var(--font-sans);
