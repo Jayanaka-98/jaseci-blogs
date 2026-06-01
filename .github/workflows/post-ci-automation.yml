@@ -111,14 +111,16 @@ jobs:
             }
 
             const marker = `<!-- blog-tracker: pr=${pr} slug=${slug} -->`;
-            const comingSoon = `https://blogs.jaseci.org/coming-soon/?slug=${encodeURIComponent(slug)}`;
+            // Slug-only permanent URL: shows an in-page "coming soon" state until
+            // the post publishes, then resolves to the full article — same link.
+            const postUrl = `https://blogs.jaseci.org/blog/posts/${slug}`;
             const body = [
               marker,
               '',
               `## Schedule: \`${slug}\``,
               '',
               `Tracking PR: #${pr}`,
-              `Coming-soon page: ${comingSoon}`,
+              `Post URL (shows "coming soon" until live): ${postUrl}`,
               '',
               'This issue is the scheduling surface for the post. It stays open until the post',
               'publishes — **merging the PR does not close it**.',
@@ -197,7 +199,7 @@ jobs:
             }
 
             const marker = `<!-- blog-docs: src=${src} pr=${pr} slug=${slug} -->`;
-            const comingSoon = `https://blogs.jaseci.org/coming-soon/?slug=${encodeURIComponent(slug)}`;
+            const postUrl = `https://blogs.jaseci.org/blog/posts/${slug}`;
             const body = [
               marker,
               '',
@@ -205,8 +207,8 @@ jobs:
               '',
               'Please add or refresh its reference in the Jac documentation.',
               '',
-              `- Coming-soon URL (stable, slug-based): ${comingSoon}`,
-              '- The final dated URL will be posted here automatically when the post goes live.',
+              `- Post URL (stable, slug-based — shows a "coming soon" page until published): ${postUrl}`,
+              '- This same URL becomes the live article once the post goes live.',
             ].join('\n');
 
             const open = await github.paginate(github.rest.issues.listForRepo, {

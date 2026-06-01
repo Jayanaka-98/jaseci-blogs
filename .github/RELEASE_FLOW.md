@@ -29,9 +29,14 @@ Author opens PR (new docs/blog/posts/<slug>.md, draft: true)
  Auto-publish (hourly cron) flips the post live when due
         ├─ removes draft:, rewrites date: (first publish), commits to main
         ├─ commit to main → deploy.yml rebuilds + ships the site
-        ├─ closes the tracker issue with the final dated URL
+        ├─ closes the tracker issue (its post URL now serves the article)
         └─ comments the live URL on the docs-reference issue
 ```
+
+The post's public URL is **slug-only and permanent** (`/blog/posts/<slug>`): the
+Jac app serves an in-page "coming soon" state for an unpublished slug and the full
+article once it's live — the **same link** throughout. There is no separate
+placeholder page and no date in the URL.
 
 **Design choice:** merge is intentionally **not** gated on scheduling. The tracker
 issue is the safety net — it stays open until the post actually publishes, so a
@@ -49,7 +54,8 @@ merged-but-unscheduled post stays visible instead of being silently lost.
 | [workflows/takedown.yml](workflows/takedown.yml) | *Take down a post* dispatch form. | unchanged |
 | [workflows/deploy.yml](workflows/deploy.yml) | Builds + ships the site image on push to `main`. | unchanged |
 | [scripts/schedule_lib.py](../scripts/schedule_lib.py) | Single writer of `.schedule.yml` + post frontmatter. | unchanged |
-| [docs/coming-soon.md](../docs/coming-soon.md) | Slug-based placeholder page. | **new** |
+| [main.jac](../main.jac) | `GetPost` now returns a `coming_soon` status for an unpublished slug (vs. `not_found`). | **changed** |
+| [pages/blog/posts/[slug].jac](../pages/blog/posts/%5Bslug%5D.jac) | Renders the in-page "coming soon" view (vs. a 404). | **changed** |
 
 ## Stage by stage
 
@@ -70,8 +76,8 @@ trivially when no posts are added) so it is safe to mark **required**.
   **exactly one** post, and reads its `slug:` from the post's frontmatter (falling
   back to the filename stem).
 - **Tracker issue (this repo):** created/updated with label `blog-schedule`, a
-  machine-readable marker, the coming-soon URL, and the editorial command menu.
-  Idempotent — re-runs update the same issue instead of opening duplicates.
+  machine-readable marker, the permanent post URL (`/blog/posts/<slug>`), and the
+  editorial command menu. Idempotent — re-runs update the same issue.
 - **Docs-reference issue (Jac docs repo):** created/updated via a GitHub App
   token. **Skipped automatically** when the App is not configured
   (`vars.ISSUE_BOT_APP_ID` empty), so the rest of the flow works without it.
@@ -109,9 +115,9 @@ and commits as `github-actions[bot]`.
 Hourly cron runs `schedule_lib.py publish-due`: entries whose `publish_at` has
 passed get `draft:` removed, `date:` rewritten on first publish, and the change is
 committed to `main`. New behaviour added for this flow:
-- **Closes the tracker issue** for each published slug, commenting the final dated
-  URL (`https://blogs.jaseci.org/blog/{yyyy}/{MM}/{dd}/{slug}/`, read from the
-  post's `date:`).
+- **Closes the tracker issue** for each published slug, commenting the live URL
+  (`https://blogs.jaseci.org/blog/posts/<slug>` — the same permanent link the
+  tracker already advertised; no date computation needed).
 - **Comments the live URL on the docs-reference issue** (App token; skipped when
   not configured).
 
@@ -144,14 +150,26 @@ post; only the scheduler can* — without interfering with the auto-publisher (w
 removes `draft:` via direct commits to `main`, never through a PR). Editing a live
 post is unaffected because its base version already has no `draft:` key.
 
-## The coming-soon page
+## Coming-soon handling (in the Jac app)
 
-`docs/coming-soon.md` serves a slug-based placeholder at
-`https://blogs.jaseci.org/coming-soon/?slug=<slug>`. It exists because the **real**
-post URL is **not knowable before publish** — the auto-publisher rewrites `date:`
-on first publish, and the URL embeds that date. Only the trailing `/{slug}/` is
-stable beforehand. The page sanitises the `slug` query param to kebab-case before
-rendering (no HTML injection).
+The site is a Jac app (not mkdocs), and a post's URL is **slug-only and stable**:
+`/blog/posts/<slug>`. So there is no separate placeholder page — the canonical post
+URL handles the unpublished case itself:
+
+- **Server** — [main.jac](../main.jac): `parse_post_file` drops drafts entirely, so
+  a draft slug would otherwise be indistinguishable from a missing one. `GetPost`
+  now does a frontmatter-only `peek_unpublished` scan: a draft whose slug matches
+  reports `{"ok": false, "status": "coming_soon", "title": …}`; a genuinely missing
+  slug reports `status: "not_found"`.
+- **Client** — [pages/blog/posts/[slug].jac](../pages/blog/posts/%5Bslug%5D.jac):
+  on `coming_soon` it renders a "Coming soon" view (with the post title) explaining
+  the link is permanent; on `not_found` it renders a 404; otherwise a generic load
+  error. (Note: the status is read into a local before use — reading a reactive
+  `has` field back in the same effect block returns the stale value.)
+
+Because the link is permanent, the tracker/docs issues advertise this exact URL,
+and it simply upgrades from the coming-soon view to the article when the post
+publishes.
 
 ## Marker reference (how steps find things)
 
@@ -168,27 +186,51 @@ Slug matches use a trailing space (`slug=<slug> `) so `foo` never matches `foo-b
 ## Coupling to deployment
 
 The publish flow depends on **one** property of `deploy.yml`: *a commit to `main`
-triggers an image build + push that the CD rolls out* (drafts are excluded at serve
-time per `mkdocs.yml`). Everything else in `deploy.yml` (image tagging, ECR/AWS
-details, buildx, the nightly rebuild, the `release`/`workflow_dispatch` triggers)
-is free to change.
+triggers an image build + push that the CD rolls out* (drafts are filtered server-
+side by `parse_post_file` in [main.jac](../main.jac)). Everything else in
+`deploy.yml` (image tagging, ECR/AWS details, buildx, the nightly rebuild, the
+`release`/`workflow_dispatch` triggers) is free to change.
 
 **Don't** remove/narrow the `push: branches: [main]` trigger or add a `paths:`
 filter excluding `docs/blog/posts/` — auto-publish would still mark the post
-`published` and the tracker issue would close claiming "now live at …", but no
-image would rebuild and the URL would 404 until the daily cron (or never). Note
-also that the tracker issue is closed the moment auto-publish pushes, which is
-slightly **before** deploy finishes building and the CD rolls the new image; if you
-want "live" claimed only after the site is actually served, move the issue-close
-step to a `workflow_run` on *Build and Deploy Mars Blog* success.
+`published` and the tracker issue would close claiming "now live at …", but no image
+would rebuild, so the post's URL would keep serving the **coming-soon view** (not a
+404 — it degrades gracefully) until the daily cron rebuild (or never). Note also
+that the tracker issue is closed the moment auto-publish pushes, slightly **before**
+deploy finishes and the CD rolls the new image; if you want "live" claimed only
+after the site is actually served, move the issue-close step to a `workflow_run` on
+*Build and Deploy Mars Blog* success.
+
+## Testing
+
+A pytest suite guards the parts that can break silently. Run it locally:
+
+```bash
+pip install pytest pyyaml
+pytest -q
+```
+
+It runs in CI on every PR and push to `main` via
+[workflows/test.yml](workflows/test.yml), and is safe to mark as a required check.
+
+| File | Covers |
+|---|---|
+| [tests/test_schedule_lib.py](../tests/test_schedule_lib.py) | The scheduler logic: `check_draft` + the un-draft guard transition, the draft-gate lint, `find_post` slug/filename resolution, the `add → publish-due → re-publish` lifecycle, **date preservation on re-publish**, takedown moves (draft/unlist/archive), and the **bot-owned header preservation** in `.schedule.yml`. |
+| [tests/test_workflows.py](../tests/test_workflows.py) | Every workflow YAML parses, and every inline `actions/github-script` block passes `node --check` (with `${{ }}` expressions substituted the way GitHub does at runtime) — catching JS typos that would otherwise only fail mid-run. |
+
+The scheduler tests redirect `schedule_lib`'s path constants at a tmp sandbox
+(see [tests/conftest.py](../tests/conftest.py)) so nothing touches the real
+`docs/blog/` tree. When you add a `schedule_lib` subcommand or a new
+`github-script` step, add/extend a test in the same shape — the workflow-syntax
+test picks up new steps automatically.
 
 ## One-time setup (admin — not done by code)
 
 The workflows degrade gracefully without step 2 (cross-repo issue steps are gated
 and simply skip).
 
-1. **Required checks on `main`.** Branch ruleset: require `Lint new posts` and at
-   least one review approval. This is the merge gate.
+1. **Required checks on `main`.** Branch ruleset: require `Lint new posts`,
+   `Tests`, and at least one review approval. This is the merge gate.
 2. **Cross-repo issue credential.** Create a **GitHub App** in `jaseci-labs` with
    **Issues: Read and write**, install it on the docs repo only, then add repo
    **variable** `ISSUE_BOT_APP_ID` and repo **secret** `ISSUE_BOT_PRIVATE_KEY`.

@@ -64,17 +64,12 @@ jobs:
           script: |
             const fs = require('fs');
             const result = JSON.parse(fs.readFileSync('result.json', 'utf8'));
-            const published = [];
-            for (const p of (result.published || [])) {
-              let url = null;
-              try {
-                const text = fs.readFileSync(p.post, 'utf8');
-                // post_url_format is "{date}/{slug}" with date as yyyy/MM/dd (mkdocs.yml).
-                const dm = text.match(/^date:\s*['"]?(\d{4})-(\d{2})-(\d{2})/m);
-                if (dm) url = `https://blogs.jaseci.org/blog/${dm[1]}/${dm[2]}/${dm[3]}/${p.slug}/`;
-              } catch (e) { core.info(`Could not read ${p.post}: ${e.message}`); }
-              published.push({ slug: p.slug, url });
-            }
+            // The Jac site serves posts at a stable slug-only URL, so the live
+            // URL is the same link the tracker/docs issues already advertised.
+            const published = (result.published || []).map(p => ({
+              slug: p.slug,
+              url: `https://blogs.jaseci.org/blog/posts/${p.slug}`,
+            }));
             core.setOutput('published', JSON.stringify(published));
 
             const open = await github.paginate(github.rest.issues.listForRepo, {

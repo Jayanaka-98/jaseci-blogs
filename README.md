@@ -90,7 +90,7 @@ When a post PR passes CI, the bot opens a **scheduling issue** (labelled `blog-s
 4. **Editor** comments `/schedule <ISO8601 UTC>` on the scheduling issue (the same slash-commands as above; they take effect once the post is on `main`).
 5. **Auto-publisher** flips the post live at the scheduled time, closes the scheduling issue with the final URL, and the commit to `main` triggers the deploy.
 
-Until a post is live, its placeholder lives at `https://blogs.jaseci.org/coming-soon/?slug=<slug>` (the real dated URL isn't known until publish). The scheduling issue stays open until the post publishes, so a merged-but-unscheduled post is never silently forgotten.
+A post's URL is permanent and slug-only — `https://blogs.jaseci.org/blog/posts/<slug>` — and the Jac app shows an in-page "coming soon" state for that URL until the post is live, then the same link serves the article. The scheduling issue stays open until the post publishes, so a merged-but-unscheduled post is never silently forgotten.
 
 Full details — triggers, tokens, idempotency markers, deploy coupling, and the one-time GitHub App setup — are in [.github/RELEASE_FLOW.md](.github/RELEASE_FLOW.md).
 

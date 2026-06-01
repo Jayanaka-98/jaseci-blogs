@@ -468,19 +468,71 @@ walker:pub GetPosts {
 }
 
 
+def:priv peek_unpublished(slug: str) -> dict | None {
+    # parse_post_file drops drafts entirely (returns None), so GetPost can't
+    # otherwise tell an unpublished post apart from a genuinely missing one.
+    # This does a lightweight frontmatter-only scan for a draft whose slug
+    # matches, returning just enough to render the "coming soon" page.
+    dir_path = Path(POSTS_DIR);
+    if not dir_path.exists() {
+        return None;
+    }
+    for path in sorted(dir_path.glob("*.md")) {
+        if path.name.startswith("_") {
+            continue;
+        }
+        try {
+            text = path.read_text(encoding="utf-8");
+        } except Exception {
+            continue;
+        }
+        if not text.startswith("---") {
+            continue;
+        }
+        parts = text.split("---", 2);
+        if len(parts) < 3 {
+            continue;
+        }
+        try {
+            meta = yaml.safe_load(parts[1]);
+        } except Exception {
+            continue;
+        }
+        if not isinstance(meta, dict) {
+            continue;
+        }
+        if not meta.get("draft", False) {
+            continue;  # published posts are served by the normal path
+        }
+        file_slug = str(meta.get("slug", path.stem));
+        if file_slug != slug {
+            continue;
+        }
+        raw_body = parts[2].strip();
+        title = str(meta.get("title", ""));
+        if not title {
+            h1_found = re.search(r"(?m)^#\s+(.+)$", raw_body);
+            title = h1_found.group(1).strip() if h1_found else slug.replace("-", " ").title();
+        }
+        return {"slug": slug, "title": strip_markdown_inline(title)};
+    }
+    return None;
+}
+
+
 walker:pub GetPost {
     has slug: str = "";
 
     can get with Root entry {
         if not self.slug {
-            report {"ok": False, "error": "missing slug"};
+            report {"ok": False, "status": "error", "error": "missing slug"};
             return;
         }
 
         registry = load_authors();
         dir_path = Path(POSTS_DIR);
         if not dir_path.exists() {
-            report {"ok": False, "error": "posts directory not found"};
+            report {"ok": False, "status": "error", "error": "posts directory not found"};
             return;
         }
 
@@ -500,7 +552,18 @@ walker:pub GetPost {
         }
 
         if found is None {
-            report {"ok": False, "error": "not found"};
+            pending = peek_unpublished(self.slug);
+            if pending is not None {
+                report {
+                    "ok": False,
+                    "status": "coming_soon",
+                    "slug": pending["slug"],
+                    "title": pending["title"],
+                    "error": "not yet published",
+                };
+                return;
+            }
+            report {"ok": False, "status": "not_found", "error": "not found"};
             return;
         }
 

@@ -706,6 +706,8 @@ def:pub page() -> JsxElement {
     has loading: bool = True;
     has post: any = None;
     has error: str = "";
+    has status: str = "";
+    has pending_title: str = "";
     has share_copied: bool = False;
     has share_open: bool = False;
 
@@ -713,6 +715,8 @@ def:pub page() -> JsxElement {
         window.scrollTo(0, 0);
         loading = True;
         error = "";
+        status = "";
+        pending_title = "";
         post = None;
         start: int = int(Date.now());
         try {
@@ -732,6 +736,13 @@ def:pub page() -> JsxElement {
                     set_social_meta(str(data["title"]), meta_desc, meta_url, str(data["cover"]));
                 } else {
                     error = str(data["error"]);
+                    # Read into a local first: reading the reactive `has` back in
+                    # this same effect block returns the stale pre-update value.
+                    new_status = str(data["status"]);
+                    status = new_status;
+                    if new_status == "coming_soon" {
+                        pending_title = str(data["title"]);
+                    }
                 }
             } else {
                 error = "No response from server.";
@@ -782,12 +793,30 @@ def:pub page() -> JsxElement {
             </article>
         </>;
     }
-    if error {
+    if status == "coming_soon" {
         return <article className="post-shell">
-            <div className="container narrow">
-                <p className="eyebrow">Couldn't load this post</p>
-                <h1 className="display">{error}</h1>
-                <p><Link className="cta-pill" to="/blog">← Back to latest</Link></p>
+            <div className="container narrow" style={{"padding": "4rem 0"}}>
+                <p className="eyebrow">Coming soon</p>
+                <h1 className="display">{pending_title or "This post isn't live yet"}</h1>
+                <p className="post-deck">This post is in the editorial pipeline and hasn't been published yet. This link is permanent — it'll open the full article once the post goes live.</p>
+                <p style={{"marginTop": "2rem"}}>
+                    <Link className="cta-pill" to="/blog">← Back to latest</Link>
+                </p>
+            </div>
+        </article>;
+    }
+    if error {
+        is_missing = (status == "not_found");
+        return <article className="post-shell">
+            <div className="container narrow" style={{"padding": "4rem 0"}}>
+                <p className="eyebrow">{is_missing and "404" or "Couldn't load this post"}</p>
+                <h1 className="display">{is_missing and "Post not found" or error}</h1>
+                {is_missing and (
+                    <p className="post-deck">This post doesn't exist. It may have been renamed, retired, or never published.</p>
+                )}
+                <p style={{"marginTop": "2rem"}}>
+                    <Link className="cta-pill" to="/blog">← Back to latest</Link>
+                </p>
             </div>
         </article>;
     }
