@@ -56,7 +56,7 @@ Posts are not published the instant they merge. An editor schedules each post fo
 /archive superseded by 2026 retrospective     (move to archived_posts/)
 ```
 
-The post's slug is inferred from the PR's changed files. To target a different post from any PR, append `slug=<name>`.
+These work both in a PR conversation and on the auto-created **scheduling issue** (see [the release flow](#the-release-flow-at-a-glance) below). The post's slug is inferred from the PR's changed files, or from the scheduling issue itself. To target a different post from any thread, append `slug=<name>`.
 
 **2. "Schedule a post" workflow.** Under the repo's **Actions** tab, run the *Schedule a post* workflow. It's a form with `action` (add / hold / cancel / publish-now), `slug`, `publish_at`, and `notes` inputs. Use this for posts that have already merged.
 
@@ -79,6 +79,20 @@ On a **first** publish the post's `date:` is rewritten to the actual publish day
 Every scheduling action -- add, hold, cancel, manual publish, auto-publish -- is a real commit on `main` made by `github-actions[bot]`, so `git log docs/blog/.schedule.yml` is the full editorial history.
 
 Anyone with write access on the repo can run these. The slash-command workflow additionally checks `author_association` so random PR commenters can't trigger it.
+
+### The release flow at a glance
+
+When a post PR passes CI, the bot opens a **scheduling issue** (labelled `blog-schedule`) and links it on the PR. That issue — not the PR — is where editors schedule the post, so scheduling is decoupled from the merge:
+
+1. **Author** opens a PR adding `docs/blog/posts/<slug>.md` with `draft: true`.
+2. **CI** (*Lint new posts*) checks the draft flag. On success the bot opens a scheduling issue (+ a docs-reference issue in the Jac docs repo if configured) and posts a sticky comment on the PR.
+3. **Reviewer** approves and merges — the merge is gated on CI + review, **not** on scheduling.
+4. **Editor** comments `/schedule <ISO8601 UTC>` on the scheduling issue (the same slash-commands as above; they take effect once the post is on `main`).
+5. **Auto-publisher** flips the post live at the scheduled time, closes the scheduling issue with the final URL, and the commit to `main` triggers the deploy.
+
+A post's URL is permanent and slug-only — `https://blogs.jaseci.org/blog/posts/<slug>` — and the Jac app shows an in-page "coming soon" state for that URL until the post is live, then the same link serves the article. The scheduling issue stays open until the post publishes, so a merged-but-unscheduled post is never silently forgotten.
+
+Full details — triggers, tokens, idempotency markers, deploy coupling, and the one-time GitHub App setup — are in [.github/RELEASE_FLOW.md](.github/RELEASE_FLOW.md).
 
 ### Adding Yourself as an Author
 
