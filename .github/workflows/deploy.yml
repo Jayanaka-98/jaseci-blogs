@@ -54,7 +54,12 @@ jobs:
       - name: Deploy jaseci-blogs with jac-scale
         working-directory: .
         run: |
-          jac start main.jac --scale
+          # `jac install` put jaclang + jac-scale + jac-client into the project
+          # venv (.jac/venv). Run THAT venv's jac so the jac-scale plugin loads
+          # at startup and registers the `--scale` flag — the global `jac` (from
+          # `pip install jaclang`) builds its arg parser before the venv is on
+          # the path, so it does not recognize `--scale`.
+          .jac/venv/bin/jac start main.jac --scale
 
       - name: Verify deployment
         run: |
