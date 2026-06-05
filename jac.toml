@@ -27,11 +27,44 @@ namespace = "jaseci-blogs"
 liveness_initial_delay = 300
 liveness_failure_threshold = 10
 readiness_initial_delay = 60
+# Read-only content server: posts/authors are parsed from disk, no graph
+# persistence or auth. Skip the MongoDB + Redis stack (falls back to
+# in-process + SQLite, which is all this app needs).
+mongodb_enabled = false
+redis_enabled = false
+# Resource requests are required for the HPA to compute CPU utilization.
+cpu_request = "100m"
+cpu_limit = "300m"
+memory_request = "256Mi"
+memory_limit = "512Mi"
+# Attach to the cluster's shared AWS ALB (group jaseci-cluster-alb-2) instead of
+# standing up a dedicated NGINX controller + NLB per app. jac-scale emits the
+# ALB Ingress for `domain`; the ALB terminates TLS via the ACM cert, so no
+# cert-manager is required. Requires jac-scale >= 0.2.23 (shared-ingress ALB
+# support, jaseci-labs/jaseci#6012 + #6309).
+shared_ingress = true
+shared_ingress_class = "alb"
+shared_ingress_tls = true
+domain = "blogs.jaseci.org"
+
+[plugins.scale.kubernetes.shared_ingress_annotations]
+"alb.ingress.kubernetes.io/scheme" = "internet-facing"
+"alb.ingress.kubernetes.io/target-type" = "ip"
+"alb.ingress.kubernetes.io/group.name" = "jaseci-cluster-alb-2"
+"alb.ingress.kubernetes.io/certificate-arn" = "arn:aws:acm:us-east-2:776241927220:certificate/642526d6-00ee-4394-970d-89d5dc898906"
+"alb.ingress.kubernetes.io/listen-ports" = '[{"HTTP": 80}, {"HTTPS": 443}]'
+"alb.ingress.kubernetes.io/ssl-redirect" = "443"
 
 [plugins.scale.secrets]
 PUBLIC_SITE_URL = "https://blogs.jaseci.org"
 
 [dependencies]
+# Jac toolchain plugins are installed by `jac install` (which reads this table),
+# not `pip install` — plugin pyproject.toml files were removed in
+# jaseci-labs/jaseci#6322. The `deploy` extra pulls in the kubernetes + docker
+# clients that `jac start --scale` needs (the `data` extra alone does not).
+"jac-scale[deploy]" = ">=0.2.23"
+jac-client = "*"
 markdown = ">=3.5"
 pyyaml = ">=6.0"
 pygments = ">=2.17"
