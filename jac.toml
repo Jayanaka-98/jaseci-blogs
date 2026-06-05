@@ -32,11 +32,14 @@ readiness_initial_delay = 60
 # in-process + SQLite, which is all this app needs).
 mongodb_enabled = false
 redis_enabled = false
-# Resource requests are required for the HPA to compute CPU utilization.
-cpu_request = "100m"
-cpu_limit = "300m"
-memory_request = "256Mi"
-memory_limit = "512Mi"
+# jac-scale builds the client bundle (vite/bun) inside the pod on every boot,
+# which is memory- and CPU-hungry: a 512Mi limit OOM-kills the build (exit 137).
+# Limits must cover the build peak even though steady-state serving is light;
+# requests stay modest (build is a short burst) and let the HPA read CPU%.
+cpu_request = "250m"
+cpu_limit = "1500m"
+memory_request = "512Mi"
+memory_limit = "3Gi"
 # Attach to the cluster's shared AWS ALB (group jaseci-cluster-alb-2) instead of
 # standing up a dedicated NGINX controller + NLB per app. jac-scale emits the
 # ALB Ingress for `domain`; the ALB terminates TLS via the ACM cert, so no
