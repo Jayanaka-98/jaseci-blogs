@@ -81,6 +81,41 @@ img {
 .container.wide {
     max-width: 1400px;
 }
+/* App-like pages (submit / editor) that want most of the viewport width. */
+.container.app {
+    max-width: min(1600px, 96vw);
+}
+
+/* Side-by-side markdown editor + live preview; stacks on narrow screens.
+   minmax(0, 1fr) (not bare 1fr = minmax(auto,1fr)) forces EQUAL columns —
+   otherwise the textarea's min-content width steals space from the preview. */
+.submit-editor-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 1rem;
+    align-items: stretch;
+}
+.submit-editor-grid > * {
+    min-width: 0;
+}
+/* The preview pane should fill its column, not the 64ch reading cap .prose sets. */
+.submit-editor-grid > .prose {
+    max-width: none;
+    margin: 0;
+}
+@media (max-width: 720px) {
+    .submit-editor-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Native date/time/select controls render their icons via color-scheme; in dark
+   mode tell the browser so the calendar/clock indicators aren't black-on-dark. */
+[data-theme="dark"] input[type="date"],
+[data-theme="dark"] input[type="time"],
+[data-theme="dark"] select {
+    color-scheme: dark;
+}
 
 .skip-link {
     position: absolute;
