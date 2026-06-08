@@ -7,6 +7,7 @@ cl import from "@jac/runtime" { Outlet, Link }
 cl {
     def:pub layout() -> JsxElement {
         has theme: str = "light";
+        has menu_open: bool = False;
 
         can with entry {
             # Site-wide runtime config. Pages read from here so we have one
@@ -98,8 +99,38 @@ cl {
                                 </svg>
                             )}
                         </button>
+                        <button
+                            type="button"
+                            className="icon-btn nav-toggle"
+                            onClick={lambda -> None { menu_open = not menu_open; }}
+                            aria-label={menu_open and "Close menu" or "Open menu"}
+                            aria-expanded={menu_open}
+                        >
+                            {menu_open and (
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18" />
+                                    <line x1="6" y1="6" x2="18" y2="18" />
+                                </svg>
+                            ) or (
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="3" y1="6" x2="21" y2="6" />
+                                    <line x1="3" y1="12" x2="21" y2="12" />
+                                    <line x1="3" y1="18" x2="21" y2="18" />
+                                </svg>
+                            )}
+                        </button>
                     </div>
                 </div>
+                {menu_open and (
+                    <nav className="mobile-nav container" aria-label="Mobile" onClick={lambda -> None { menu_open = False; }}>
+                        <Link to="/blog">Latest</Link>
+                        <Link to="/blog/archive">Archive</Link>
+                        <Link to="/blog/categories">Categories</Link>
+                        <Link to="/submit" className="nav-write">Contribute</Link>
+                        <a href="https://newsletter.jaseci.org" target="_blank" rel="noopener">Newsletter</a>
+                        <a href="https://www.jaseci.org" target="_blank" rel="noopener" className="nav-jaseci">Jaseci.org</a>
+                    </nav>
+                )}
             </header>
 
             <main id="main" className="site-main">

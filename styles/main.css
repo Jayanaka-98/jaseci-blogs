@@ -258,9 +258,49 @@ img {
     color: var(--accent);
 }
 
+/* Mobile menu: the hamburger toggle and dropdown panel are desktop-hidden and
+   only appear once the primary nav collapses at the breakpoint below. */
+.nav-toggle {
+    display: none;
+}
+.mobile-nav {
+    display: none;
+}
 @media (max-width: 860px) {
     .primary-nav {
         display: none;
+    }
+    .nav-toggle {
+        display: inline-flex;
+    }
+    .mobile-nav {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        padding-top: 0.75rem;
+        padding-bottom: 1rem;
+        border-top: 1px solid var(--rule);
+    }
+    .mobile-nav a {
+        color: var(--text);
+        font-weight: 500;
+        padding: 0.6rem 0;
+    }
+    .mobile-nav a:hover {
+        color: var(--accent);
+    }
+    .mobile-nav a.nav-jaseci {
+        color: var(--accent);
+        font-weight: 600;
+    }
+    .mobile-nav a.nav-write {
+        align-self: flex-start;
+        margin-top: 0.25rem;
+        padding: 0.5rem 1.1rem;
+        background: var(--accent);
+        color: var(--bg);
+        border-radius: 999px;
+        font-weight: 600;
     }
 }
 
