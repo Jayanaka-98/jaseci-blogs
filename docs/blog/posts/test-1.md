@@ -1,5 +1,5 @@
 ---
-date: 2026-06-06
+date: 2026-06-08
 authors:
   - jayanaka
 categories:
@@ -15,3 +15,5 @@ This is a test blog
 ```jac
 glob string:str = "str";
 ```
+
+ha ha edited
