@@ -1265,7 +1265,7 @@ def:priv submit_via_fork(
         headers=gh_headers(token),
         json={
             "title": pr_title, "head": f"{login}:{branch}", "base": base_branch,
-            "body": pr_body, "draft": True,
+            "body": pr_body,
         },
         timeout=30,
     ), "open pull request");
