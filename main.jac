@@ -903,11 +903,10 @@ def:priv mint_session_token(login: str) -> str {
     if user is not None {
         user_id = str(user.get("user_id", ""));
     } else {
-        created = um.create_user(
-            identities=[{"type": "username", "value": login}],
-            credential={"type": "password", "password": uuid.uuid4().hex},
-            profile={},
-        );
+        # Use the high-level convenience (username + password) rather than the
+        # low-level create_user(identities=...): its signature differs across
+        # jac-scale versions, so create_internal_user keeps us version-agnostic.
+        created = um.create_internal_user(login, uuid.uuid4().hex);
         user_id = str(created.get("user_id", ""));
     }
     if not user_id {
@@ -1546,16 +1545,9 @@ walker:pub GithubOAuthExchange {
             return;
         }
         gh_token = str(profile["token"]);
-        try {
-            token = mint_session_token(str(profile["login"]));
-        } except Exception as e {
-            # Surface the real cause (jac-scale user store / Mongo / JWT) to the
-            # client instead of a generic failure, so prod issues are diagnosable.
-            report {"ok": False, "error": f"session error: {e}"};
-            return;
-        }
+        token = mint_session_token(str(profile["login"]));
         if not token {
-            report {"ok": False, "error": "could not start session (no user id)"};
+            report {"ok": False, "error": "could not start session"};
             return;
         }
         # token: jac-scale session JWT (the browser stores it as `jac_token`, the
