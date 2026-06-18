@@ -42,3 +42,9 @@ Thumbs.db
 
 # Generated files
 docs/playground/jaclang.zip
+
+# Jac build artifacts and dev DB
+.jac/
+
+# Pyodide jaclang bundle (generated, 7MB)
+public/jaclang.zip

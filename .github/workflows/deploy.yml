@@ -1,136 +1,85 @@
-name: Build and Deploy Mars Blog
+name: Deploy jaseci-blogs with jac-scale
 
 on:
   push:
     branches:
       - main
-  release:
-    types: [published]
   workflow_dispatch:
-  schedule:
-    # Rebuild documentation daily at 2 AM UTC
-    - cron: '0 2 * * *'
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  deploy-mars-blog:
+  deploy-jaseci-blogs:
     runs-on: ubuntu-latest
-    outputs:
-      tag: ${{ steps.tag.outputs.tag }}
 
     permissions:
       id-token: write
       contents: read
 
     steps:
-      # Checkout the repository
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Full git history for changelog generation
 
-      # Set up QEMU for multi-architecture builds
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      # Set up Docker Buildx for multi-architecture builds
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # Set up Python
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.12'
-
-      # Cache pip dependencies
-      - name: Cache pip dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      # Install documentation dependencies
-      - name: Install documentation dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e .
-
-      # Configure AWS credentials using OIDC
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4.2.0
         with:
           aws-region: us-east-2
-          role-to-assume: arn:aws:iam::776241927220:role/GitHubActionsSharedECRRole
-          role-session-name: GitHubActions
+          role-to-assume: arn:aws:iam::776241927220:role/GitHubActionsJaseciDeployRole
+          role-session-name: GitHubActions-JaseciBlogs
           audience: sts.amazonaws.com
 
-      # Login to AWS ECR
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      # Extract tag name from GitHub ref (use semantic versioning on push like jac-lang)
-      - name: Get tag name
-        id: tag
+      - name: Update kubeconfig for EKS
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            # Manual dispatch - use timestamp
-            TAG="manual-$(date +%Y%m%d-%H%M%S)"
-          elif [[ "${{ github.event_name }}" == "release" ]]; then
-            # Release event - use tag name
-            TAG_NAME=${GITHUB_REF#refs/tags/}
-            TAG="$TAG_NAME"
-          elif [[ "${{ github.event_name }}" == "schedule" ]]; then
-            # For scheduled builds, use date-based versioning
-            TAG="nightly-$(date +'%Y%m%d')"
-          else
-            # For push builds, create a versioned tag: v1.<utc_timestamp>.<short_sha>
-            # Timestamp is monotonic across history rewrites, so the ImagePolicy
-            # always picks up the most recently pushed image.
-            TIMESTAMP=$(date -u +%Y%m%d%H%M%S)
-            SHORT_SHA=$(git rev-parse --short=8 HEAD)
-            TAG="v1.${TIMESTAMP}.${SHORT_SHA}"
-          fi
+          aws eks update-kubeconfig --region us-east-2 --name jaseci-cluster
+          kubectl config current-context
 
-          echo "Tag: $TAG"
-          echo "Event: ${{ github.event_name }}"
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-      # Prepare documentation for serving
-      - name: Prepare documentation for serving
+      - name: Install Jac toolchain and project dependencies
         run: |
-          echo "Preparing MkDocs for serving..."
+          pip install --upgrade pip
+          # jaclang core ships the `jac` CLI and is pip-installable. The Jac
+          # plugins (jac-scale, jac-client) no longer carry a pyproject.toml
+          # (jaseci-labs/jaseci#6322), so they install via `jac install`, which
+          # reads [dependencies] in jac.toml into the project's .jac/venv.
+          # `jac start` adds that venv to sys.path automatically.
+          pip install jaclang
+          jac install
 
-          # Create build info file in docs directory
-          echo "Build Information:" > docs/build-info.txt
-          echo "Version: ${{ steps.tag.outputs.tag }}" >> docs/build-info.txt
-          echo "Built: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> docs/build-info.txt
-          echo "Commit: ${{ github.sha }}" >> docs/build-info.txt
-          echo "Branch: ${{ github.ref_name }}" >> docs/build-info.txt
-          echo "Trigger: ${{ github.event_name }}" >> docs/build-info.txt
-
-          echo "Documentation prepared for serving"
-
-      # Build and push Docker image
-      - name: Build and push Docker image
-        env:
-          ECR_REGISTRY: 776241927220.dkr.ecr.us-east-2.amazonaws.com
-          ECR_REPOSITORY: jaseci-blogs
-          IMAGE_TAG: ${{ steps.tag.outputs.tag }}
+      - name: Deploy jaseci-blogs with jac-scale
+        working-directory: .
         run: |
-          echo "Building and pushing to: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-          
-          # Build and push multi-architecture image
-          docker buildx build \
-            --platform linux/amd64,linux/arm64 \
-            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-            -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
-            --push \
-            .
+          # `jac install` put jaclang + jac-scale + jac-client into the project
+          # venv (.jac/venv). Run THAT venv's jac so the jac-scale plugin loads
+          # at startup and registers the `--scale` flag — the global `jac` (from
+          # `pip install jaclang`) builds its arg parser before the venv is on
+          # the path, so it does not recognize `--scale`.
+          .jac/venv/bin/jac start main.jac --scale
 
+      - name: Verify deployment
+        run: |
+          echo "Checking deployment status..."
+          kubectl get deployments -n jaseci-blogs
+          kubectl get services -n jaseci-blogs
+          kubectl get pods -n jaseci-blogs
+
+      - name: Deployment Summary
+        if: always()
+        run: |
+          echo "## jaseci-blogs Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "### Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- **App Name**: jaseci-blogs" >> $GITHUB_STEP_SUMMARY
+          echo "- **Namespace**: jaseci-blogs" >> $GITHUB_STEP_SUMMARY
+          echo "- **Cluster**: jaseci-cluster" >> $GITHUB_STEP_SUMMARY
+          echo "- **Region**: us-east-2" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered By**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployment Status" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          kubectl get all -n jaseci-blogs 2>&1 >> $GITHUB_STEP_SUMMARY || echo "Unable to fetch deployment status" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
