@@ -124,6 +124,27 @@ def clear_session() -> None {
 }
 
 
+def set_jac_token(tok: str) -> None {
+    # jac-scale's client runtime reads the session JWT from localStorage["jac_token"]
+    # and sends it as `Authorization: Bearer` on every walker call. We mint the
+    # token server-side after GitHub OAuth, so we hand it to the runtime here.
+    try {
+        window.localStorage.setItem("jac_token", tok);
+    } except Exception {
+        _ignore = None;
+    }
+}
+
+
+def clear_jac_token() -> None {
+    try {
+        window.localStorage.removeItem("jac_token");
+    } except Exception {
+        _ignore = None;
+    }
+}
+
+
 def query_param(name: str) -> str {
     # Manual parse — URLSearchParams is a JS constructor (needs `new`, which
     # Jac can't emit), so we read window.location.search ourselves.
@@ -178,8 +199,8 @@ def:pub page() -> JsxElement {
     has booting: bool = True;
     has signed_in: bool = False;
     has profile: any = None;
-    has token: str = "";
-    has is_editor: bool = False;
+    has gh_enc: str = "";  # Fernet-encrypted GitHub token; sent to walkers per call
+    has is_reviewer: bool = False;
     has auth_error: str = "";
 
     has tab: str = "write";
@@ -218,14 +239,15 @@ def:pub page() -> JsxElement {
                     data = res.reports[0];
                     if data["ok"] {
                         sess = {
-                            "token": str(data["token"]),
+                            "gh_enc": str(data["gh_enc"]),
                             "profile": data["profile"],
-                            "is_editor": bool(data["is_editor"]),
+                            "is_reviewer": bool(data["is_reviewer"]),
                         };
                         save_session(sess);
-                        token = sess["token"];
+                        set_jac_token(str(data["token"]));
+                        gh_enc = str(sess["gh_enc"]);
                         profile = sess["profile"];
-                        is_editor = sess["is_editor"];
+                        is_reviewer = bool(sess["is_reviewer"]);
                         signed_in = True;
                     } else {
                         auth_error = str(data["error"]);
@@ -246,9 +268,9 @@ def:pub page() -> JsxElement {
         # 2) restore an existing session
         existing = read_session();
         if existing {
-            token = str(existing["token"]);
+            gh_enc = str(existing["gh_enc"]);
             profile = existing["profile"];
-            is_editor = bool(existing["is_editor"]);
+            is_reviewer = bool(existing["is_reviewer"]);
             signed_in = True;
         }
         booting = False;
@@ -276,10 +298,11 @@ def:pub page() -> JsxElement {
 
     def sign_out() -> None {
         clear_session();
+        clear_jac_token();
         signed_in = False;
         profile = None;
-        token = "";
-        is_editor = False;
+        gh_enc = "";
+        is_reviewer = False;
     }
 
     def on_title(v: str) -> None {
@@ -379,12 +402,12 @@ def:pub page() -> JsxElement {
             res: any = None;
             if edit_pr > 0 {
                 res = root spawn UpdatePost(
-                    session=token, pr_number=edit_pr, title=title, slug=slug,
+                    gh_enc=gh_enc, pr_number=edit_pr, title=title, slug=slug,
                     categories=cats, description=description, body_md=body, images=images,
                 );
             } else {
                 res = root spawn SubmitPost(
-                    session=token, title=title, slug=slug, categories=cats,
+                    gh_enc=gh_enc, title=title, slug=slug, categories=cats,
                     description=description, body_md=body, author_bio=bio, images=images,
                 );
             }
@@ -413,7 +436,7 @@ def:pub page() -> JsxElement {
     async def start_edit(pr: int) -> None {
         subs_busy = f"edit-{pr}";
         try {
-            res = root spawn GetSubmissionForEdit(session=token, pr_number=pr);
+            res = root spawn GetSubmissionForEdit(gh_enc=gh_enc, pr_number=pr);
             if res.reports and len(res.reports) > 0 {
                 data = res.reports[0];
                 if data["ok"] {
@@ -440,7 +463,7 @@ def:pub page() -> JsxElement {
     async def open_preview(pr: int) -> None {
         subs_busy = f"prev-{pr}";
         try {
-            res = root spawn CreatePreview(session=token, pr_number=pr, origin=site_origin());
+            res = root spawn CreatePreview(gh_enc=gh_enc, pr_number=pr, origin=site_origin());
             if res.reports and len(res.reports) > 0 {
                 data = res.reports[0];
                 if data["ok"] {
@@ -477,7 +500,7 @@ def:pub page() -> JsxElement {
         subs_loading = True;
         subs_error = "";
         try {
-            res = root spawn MySubmissions(session=token);
+            res = root spawn MySubmissions(gh_enc=gh_enc);
             if res.reports and len(res.reports) > 0 {
                 data = res.reports[0];
                 if data["ok"] {
@@ -536,7 +559,7 @@ def:pub page() -> JsxElement {
                 </span>
             </div>
             <div style={{"display": "flex", "alignItems": "center", "gap": "0.75rem"}}>
-                {is_editor and <Link to="/editor" className="tag">Editor dashboard →</Link>}
+                {is_reviewer and <Link to="/reviewer" className="tag">Reviewer dashboard →</Link>}
                 <button type="button" className="runnable-copy" onClick={lambda -> None { sign_out(); }}>Sign out</button>
             </div>
         </div>
@@ -561,7 +584,7 @@ def:pub page() -> JsxElement {
                     {result["edited"] and "Your changes were saved" or "Your post is in review"}
                 </h2>
                 <p className="post-deck">
-                    {result["edited"] and "The pull request was updated with your changes." or "A draft pull request was opened. An editor will review and schedule it."}
+                    {result["edited"] and "The pull request was updated with your changes." or "A draft pull request was opened. A reviewer will review and schedule it."}
                 </p>
                 <p style={{"marginTop": "1.5rem", "display": "flex", "gap": "0.75rem"}}>
                     <a className="cta-pill" href={result["pr_url"]} target="_blank" rel="noopener">View pull request →</a>

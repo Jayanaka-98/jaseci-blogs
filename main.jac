@@ -21,9 +21,9 @@ import uuid;
 import base64;
 import hashlib;
 import requests;
-import jwt;
 import markdown as md;
 import from cryptography.fernet { Fernet }
+import from jac_scale.user_manager { JacScaleUserManager }
 import from datetime { date as date_cls }
 import from pathlib { Path }
 
@@ -540,7 +540,8 @@ walker:pub GetPost {
         # Shareable draft preview: a valid token returns the stored snapshot even
         # though the post is still draft:true, so the page renders it in full.
         if self.preview {
-            doc = match_preview([-->][?:PreviewDoc], self.preview);
+            shared_root = root.shared;  # jac:ignore[E1030] runtime attr, no static stub
+            doc = match_preview([shared_root -->][?:PreviewDoc], self.preview);
             if doc is not None and doc.slug == self.slug {
                 report doc.data;
                 return;
@@ -781,16 +782,18 @@ walker:pub GetRuntimeZip {
 # OAuth App with `public_repo` scope is all that's needed; no org-owned app, no
 # installation approval.
 #
-# The user's OAuth token is needed at submit time, so it's carried INSIDE the
-# signed session — but ENCRYPTED (Fernet), so the browser only ever holds
-# ciphertext; the server decrypts per request. Editors (repo write access, read
-# live from GitHub) get a review dashboard; its write-actions (merge, schedule,
-# take-down) run with the editor's OWN access — merge on the PR page, slash-
-# commands pasted as a PR comment — so nothing here needs elevated permissions.
+# The session is a jac-scale JWT (the browser stores it as `jac_token`). The
+# user's OAuth token is needed again at submit time, so it's returned ENCRYPTED
+# (Fernet) and the browser only ever holds ciphertext, passing it back per
+# request as `gh_enc` for the server to decrypt. Reviewers (repo write access,
+# read live from GitHub) get a review dashboard; its write-actions (merge,
+# schedule, take-down) run with the reviewer's OWN access — merge on the PR page,
+# slash-commands pasted as a PR comment — so nothing here needs elevated perms.
 #
 # Required env (k8s secrets — see .github/SUBMIT_FLOW.md):
 #   GH_OAUTH_CLIENT_ID / GH_OAUTH_CLIENT_SECRET  — the OAuth App (sign-in + acts as user)
-#   SUBMIT_SESSION_SECRET                        — HS256 sign + Fernet key for sessions
+#   JWT_SECRET                                   — jac-scale's session JWT signing key
+#   SUBMIT_SESSION_SECRET                        — Fernet key for the GitHub token at rest
 #   GH_REPO (default jaseci-labs/jaseci-blogs) / GH_BASE_BRANCH (default main)
 
 glob ALLOWED_CATEGORIES = [
@@ -800,7 +803,6 @@ glob ALLOWED_CATEGORIES = [
 glob MAX_IMAGE_BYTES = 100 * 1024;
 glob MAX_IMAGES = 8;
 glob ALLOWED_IMAGE_EXT = ["png", "jpg", "jpeg", "gif", "webp", "svg"];
-glob SESSION_TTL = 60 * 60 * 8;
 # Marker text stamped into each submission PR body; also the search term that
 # finds submissions (we can't add a label as the contributor, so the body
 # marker is the index instead).
@@ -810,10 +812,11 @@ glob PREVIEW_TTL = 60 * 60 * 24 * 30;  # shareable draft previews live 1 month
 
 
 node PreviewDoc {
-    # A persisted, public draft-preview snapshot. Connected to root (which all
-    # :pub walkers share), so anyone with the random token can read it. Holds the
-    # fully-rendered GetPost-shaped payload so the real post page renders it with
-    # runnable code blocks, mermaid, etc. Expires after PREVIEW_TTL.
+    # A persisted, public draft-preview snapshot. Hung off the shared public root
+    # (root.shared) and granted ReadPerm, so anyone with the random token can read
+    # it regardless of sign-in state. Holds the fully-rendered GetPost-shaped
+    # payload so the real post page renders it with runnable code blocks, mermaid,
+    # etc. Expires after PREVIEW_TTL.
     has token: str = "";
     has slug: str = "";
     has data: dict = {};
@@ -866,53 +869,48 @@ def:priv encrypt_token(tok: str) -> str {
 }
 
 
-def:priv sign_session(profile: dict, gh_token: str) -> str {
-    # Short-lived HS256 session carrying the verified identity AND the GitHub
-    # user token — but the token is ENCRYPTED, so the browser (which stores this
-    # session) only ever holds ciphertext. The server decrypts it per request.
-    secret = env_str("SUBMIT_SESSION_SECRET");
-    now = int(time.time());
-    payload = {
-        "login": str(profile.get("login", "")),
-        "uid": int(profile.get("uid", 0)),
-        "name": str(profile.get("name", "")),
-        "avatar": str(profile.get("avatar", "")),
-        "ght": encrypt_token(gh_token),
-        "iat": now,
-        "exp": now + SESSION_TTL,
-    };
-    return str(jwt.encode(payload, secret, algorithm="HS256"));
-}
-
-
-def:priv verify_session(token: str) -> dict | None {
-    secret = env_str("SUBMIT_SESSION_SECRET");
-    if not token or not secret {
-        return None;
-    }
-    try {
-        data = jwt.decode(token, secret, algorithms=["HS256"]);
-    } except Exception {
-        return None;
-    }
-    if isinstance(data, dict) {
-        return data;
-    }
-    return None;
-}
-
-
-def:priv session_gh_token(sess: dict) -> str {
-    # Decrypt the GitHub user token embedded in a verified session.
-    ct = str(sess.get("ght", ""));
+def:priv decrypt_gh(ct: str) -> str {
+    # Decrypt the GitHub user token the browser hands back. The browser only ever
+    # holds Fernet ciphertext; the server decrypts it per request to act on
+    # GitHub as the user. jac-scale's bearer token handles WHO the caller is;
+    # this ciphertext is the separate "act on GitHub" capability.
     if not ct {
         return "";
     }
     try {
-        return fernet().decrypt(ct.encode("ascii")).decode("utf-8");
+        return str(fernet().decrypt(ct.encode("ascii")).decode("utf-8"));
     } except Exception {
         return "";
     }
+}
+
+
+def:priv mint_session_token(login: str) -> str {
+    # Hand the session off to jac-scale instead of hand-rolling a JWT. Each
+    # GitHub identity maps to a jac-scale user (created on first sign-in); we mint
+    # a token for it. jac-scale signs/validates with JWT_SECRET — no key
+    # management here. The user's password is random and never used: identity is
+    # proven by GitHub OAuth, and we mint the token directly rather than via
+    # /user/login.
+    if not login {
+        return "";
+    }
+    um = JacScaleUserManager(base_path="");
+    user = um.find_user_by_identity(login);
+    if user is not None {
+        user_id = str(user.get("user_id", ""));
+    } else {
+        created = um.create_user(
+            identities=[{"type": "username", "value": login}],
+            credential={"type": "password", "password": uuid.uuid4().hex},
+            profile={},
+        );
+        user_id = str(created.get("user_id", ""));
+    }
+    if not user_id {
+        return "";
+    }
+    return str(um.create_jwt_token(user_id));
 }
 
 
@@ -990,7 +988,7 @@ def:priv oauth_exchange_code(code: str, redirect_uri: str) -> dict | None {
 
 def:priv has_write_access(token: str) -> bool {
     # Ask GitHub what THIS user can do on the repo: GET /repos returns a
-    # `permissions` block for the authenticated caller. push/maintain/admin = editor.
+    # `permissions` block for the authenticated caller. push/maintain/admin = reviewer.
     if not token {
         return False;
     }
@@ -1007,6 +1005,31 @@ def:priv has_write_access(token: str) -> bool {
     } except Exception {
         return False;
     }
+}
+
+
+def:priv gh_user(token: str) -> dict {
+    # The signed-in user's GitHub identity, read live from their own token (so
+    # it's authoritative — used to authorize "edit/list your own submissions" and
+    # to build the author entry). Replaces the profile that used to ride inside
+    # the hand-rolled session JWT; shaped like oauth_exchange_code's profile.
+    if not token {
+        return {};
+    }
+    try {
+        u = requests.get(f"{GH_API}/user", headers=gh_headers(token), timeout=30).json();
+    } except Exception {
+        return {};
+    }
+    if not isinstance(u, dict) or "login" not in u {
+        return {};
+    }
+    return {
+        "login": str(u.get("login", "")),
+        "uid": int(u.get("id", 0)),
+        "name": str(u.get("name") or u.get("login", "")),
+        "avatar": str(u.get("avatar_url", "")),
+    };
 }
 
 
@@ -1274,7 +1297,7 @@ def:priv submit_via_fork(
 
 
 def:priv rewrite_assets_to_raw(body: str, repo: str, sha: str) -> str {
-    # For editor previews: point asset references at the raw blobs on the PR's
+    # For reviewer previews: point asset references at the raw blobs on the PR's
     # head ref, so images render before the post is merged + deployed.
     base = f"https://raw.githubusercontent.com/{repo}/{sha}/docs/assets/";
     body = re.sub(r"(!\[[^\]]*\]\()(?:\.\./)+assets/", r"\1" + base, body);
@@ -1343,7 +1366,7 @@ def:priv render_submitted_markdown(text: str, raw_repo: str, raw_sha: str) -> di
 
 def:priv fetch_pr_post(token: str, pr_number: int) -> dict | None {
     # Read the single post file added by a submission PR (from the PR's head ref).
-    # Shared by the editor preview and the shareable-preview creator.
+    # Shared by the reviewer preview and the shareable-preview creator.
     h = gh_headers(token);
     repo = gh_repo();
     pr = requests.get(f"{GH_API}/repos/{repo}/pulls/{pr_number}", headers=h, timeout=30).json();
@@ -1431,8 +1454,8 @@ def:priv match_preview(docs: list, token: str) -> any {
 }
 
 
-walker:pub CreatePreview {
-    has session: str = "";
+walker:priv CreatePreview {
+    has gh_enc: str = "";
     has pr_number: int = 0;
     # The browser's current origin, so the shareable link points at THIS
     # deployment (localhost in dev, blogs.jaseci.org in prod) instead of the
@@ -1441,9 +1464,8 @@ walker:pub CreatePreview {
     has origin: str = "";
 
     can make with Root entry {
-        sess = verify_session(self.session);
-        gh_token = session_gh_token(sess) if sess is not None else "";
-        if sess is None or not gh_token {
+        gh_token = decrypt_gh(self.gh_enc);
+        if not gh_token {
             report {"ok": False, "error": "not signed in"};
             return;
         }
@@ -1463,10 +1485,15 @@ walker:pub CreatePreview {
         }
         rendered = render_submitted_markdown(str(pr["content"]), str(pr["head_repo"]), str(pr["head_sha"]));
         token = uuid.uuid4().hex;
-        here ++> PreviewDoc(
+        # Previews are public (opened anonymously via /preview/<token>), so they
+        # live on the shared public root, not the caller's per-user root, and are
+        # granted ReadPerm so anonymous readers can see them.
+        shared_root = root.shared;  # jac:ignore[E1030] runtime attr, no static stub
+        fresh = shared_root ++> PreviewDoc(
             token=token, slug=str(rendered["slug"]),
             data=preview_payload(rendered), created_at=float(time.time()),
         );
+        grant(fresh[0], level=ReadPerm);
         base = self.origin.rstrip("/") if self.origin else public_site_url();
         report {"ok": True, "token": token, "slug": str(rendered["slug"]), "url": f"{base}/preview/{token}"};
     }
@@ -1479,7 +1506,8 @@ walker:pub GetPreview {
     has token: str = "";
 
     can get with Root entry {
-        doc = match_preview([-->][?:PreviewDoc], self.token);
+        shared_root = root.shared;  # jac:ignore[E1030] runtime attr, no static stub
+        doc = match_preview([shared_root -->][?:PreviewDoc], self.token);
         if doc is None {
             report {"ok": False, "error": "This preview link is invalid or has expired."};
             return;
@@ -1513,15 +1541,25 @@ walker:pub GithubOAuthExchange {
             return;
         }
         gh_token = str(profile["token"]);
+        token = mint_session_token(str(profile["login"]));
+        if not token {
+            report {"ok": False, "error": "could not start session"};
+            return;
+        }
+        # token: jac-scale session JWT (the browser stores it as `jac_token`, the
+        # runtime sends it as a Bearer on every walker call). gh_enc: the GitHub
+        # token as Fernet ciphertext — the browser holds only this, and passes it
+        # back per request so the server can act on GitHub as the user.
         report {
             "ok": True,
-            "token": sign_session(profile, gh_token),
+            "token": token,
+            "gh_enc": encrypt_token(gh_token),
             "profile": {
                 "login": profile["login"],
                 "name": profile["name"],
                 "avatar": profile["avatar"],
             },
-            "is_editor": has_write_access(gh_token),
+            "is_reviewer": has_write_access(gh_token),
         };
     }
 }
@@ -1595,8 +1633,8 @@ def:priv parse_post_for_edit(content: str) -> dict {
 }
 
 
-walker:pub SubmitPost {
-    has session: str = "";
+walker:priv SubmitPost {
+    has gh_enc: str = "";
     has title: str = "";
     has slug: str = "";
     has categories: list = [];
@@ -1606,13 +1644,13 @@ walker:pub SubmitPost {
     has images: list = [];
 
     can submit with Root entry {
-        sess = verify_session(self.session);
-        if sess is None {
-            report {"ok": False, "error": "not signed in"};
+        gh_token = decrypt_gh(self.gh_enc);
+        if not gh_token {
+            report {"ok": False, "error": "session expired — please sign in again"};
             return;
         }
-        gh_token = session_gh_token(sess);
-        if not gh_token {
+        profile = gh_user(gh_token);
+        if not profile.get("login") {
             report {"ok": False, "error": "session expired — please sign in again"};
             return;
         }
@@ -1648,7 +1686,7 @@ walker:pub SubmitPost {
         }
         image_files = img_res["files"];
 
-        (author_id, new_entry) = resolve_author_id(sess, self.author_bio.strip());
+        (author_id, new_entry) = resolve_author_id(profile, self.author_bio.strip());
         post_md = build_post_markdown(title, slug, cats, self.description.strip(), author_id, body);
         files = [{"path": f"docs/blog/posts/{slug}.md", "content": post_md, "binary": False}];
         files = files + image_files;
@@ -1660,19 +1698,19 @@ walker:pub SubmitPost {
         }
 
         branch = f"submit/{slug}-{int(time.time())}";
-        marker = f"\n\n<!-- blog-submission slug={slug} by={sess['login']} -->";
+        marker = f"\n\n<!-- blog-submission slug={slug} by={profile['login']} -->";
         pr_body = (
             "Blog submission via the /submit form.\n\n"
             + f"**Title:** {title}\n"
-            + f"**Author:** @{sess['login']} (`{author_id}`)\n"
+            + f"**Author:** @{profile['login']} (`{author_id}`)\n"
             + f"**Categories:** {', '.join(cats)}\n\n"
             + "Opened from the author's fork via the /submit form. "
-            + "`draft: true` is set; an editor will schedule publication."
+            + "`draft: true` is set; a reviewer will schedule publication."
             + marker
         );
 
         try {
-            pr = submit_via_fork(gh_token, str(sess["login"]), branch, files, f"Add blog post: {title}", title, pr_body);
+            pr = submit_via_fork(gh_token, str(profile["login"]), branch, files, f"Add blog post: {title}", title, pr_body);
         } except Exception as e {
             report {"ok": False, "error": f"could not open PR: {e}"};
             return;
@@ -1686,14 +1724,13 @@ walker:pub SubmitPost {
 }
 
 
-walker:pub GetSubmissionForEdit {
-    has session: str = "";
+walker:priv GetSubmissionForEdit {
+    has gh_enc: str = "";
     has pr_number: int = 0;
 
     can get with Root entry {
-        sess = verify_session(self.session);
-        gh_token = session_gh_token(sess) if sess is not None else "";
-        if sess is None or not gh_token {
+        gh_token = decrypt_gh(self.gh_enc);
+        if not gh_token {
             report {"ok": False, "error": "not signed in"};
             return;
         }
@@ -1707,7 +1744,7 @@ walker:pub GetSubmissionForEdit {
             report {"ok": False, "error": "no post file found in this PR"};
             return;
         }
-        if str(pr["head_owner"]).lower() != str(sess["login"]).lower() {
+        if str(pr["head_owner"]).lower() != str(gh_user(gh_token).get("login", "")).lower() {
             report {"ok": False, "error": "you can only edit your own submissions"};
             return;
         }
@@ -1721,8 +1758,8 @@ walker:pub GetSubmissionForEdit {
 }
 
 
-walker:pub UpdatePost {
-    has session: str = "";
+walker:priv UpdatePost {
+    has gh_enc: str = "";
     has pr_number: int = 0;
     has title: str = "";
     has slug: str = "";
@@ -1732,9 +1769,13 @@ walker:pub UpdatePost {
     has images: list = [];
 
     can update with Root entry {
-        sess = verify_session(self.session);
-        gh_token = session_gh_token(sess) if sess is not None else "";
-        if sess is None or not gh_token {
+        gh_token = decrypt_gh(self.gh_enc);
+        if not gh_token {
+            report {"ok": False, "error": "not signed in"};
+            return;
+        }
+        profile = gh_user(gh_token);
+        if not profile.get("login") {
             report {"ok": False, "error": "not signed in"};
             return;
         }
@@ -1748,7 +1789,7 @@ walker:pub UpdatePost {
             report {"ok": False, "error": "no post file found in this PR"};
             return;
         }
-        if str(pr["head_owner"]).lower() != str(sess["login"]).lower() {
+        if str(pr["head_owner"]).lower() != str(profile["login"]).lower() {
             report {"ok": False, "error": "you can only edit your own submissions"};
             return;
         }
@@ -1781,7 +1822,7 @@ walker:pub UpdatePost {
 
         # Resolve the author's id (reuses their existing .authors.yml entry);
         # don't re-touch .authors.yml on edit — the entry already exists.
-        (author_id, _new) = resolve_author_id(sess, "");
+        (author_id, _new) = resolve_author_id(profile, "");
         post_md = build_post_markdown(title, slug, cats, self.description.strip(), author_id, body);
         files = [{"path": f"docs/blog/posts/{slug}.md", "content": post_md, "binary": False}];
         files = files + img_res["files"];
@@ -1797,17 +1838,20 @@ walker:pub UpdatePost {
 }
 
 
-walker:pub MySubmissions {
-    has session: str = "";
+walker:priv MySubmissions {
+    has gh_enc: str = "";
 
     can get with Root entry {
-        sess = verify_session(self.session);
-        if sess is None {
+        gh_token = decrypt_gh(self.gh_enc);
+        if not gh_token {
             report {"ok": False, "error": "not signed in"};
             return;
         }
-        login = str(sess["login"]);
-        gh_token = session_gh_token(sess);
+        login = str(gh_user(gh_token).get("login", ""));
+        if not login {
+            report {"ok": False, "error": "not signed in"};
+            return;
+        }
         try {
             q = f'repo:{gh_repo()} type:pr "{SUBMISSION_TAG}" in:body';
             r = requests.get(
@@ -1870,14 +1914,13 @@ walker:pub MySubmissions {
 }
 
 
-walker:pub ListSubmissions {
-    has session: str = "";
+walker:priv ListSubmissions {
+    has gh_enc: str = "";
 
     can get with Root entry {
-        sess = verify_session(self.session);
-        gh_token = session_gh_token(sess) if sess is not None else "";
-        if sess is None or not has_write_access(gh_token) {
-            report {"ok": False, "error": "editor access required"};
+        gh_token = decrypt_gh(self.gh_enc);
+        if not has_write_access(gh_token) {
+            report {"ok": False, "error": "reviewer access required"};
             return;
         }
         try {
@@ -1913,15 +1956,14 @@ walker:pub ListSubmissions {
 }
 
 
-walker:pub PreviewSubmission {
-    has session: str = "";
+walker:priv PreviewSubmission {
+    has gh_enc: str = "";
     has pr_number: int = 0;
 
     can get with Root entry {
-        sess = verify_session(self.session);
-        gh_token = session_gh_token(sess) if sess is not None else "";
-        if sess is None or not has_write_access(gh_token) {
-            report {"ok": False, "error": "editor access required"};
+        gh_token = decrypt_gh(self.gh_enc);
+        if not has_write_access(gh_token) {
+            report {"ok": False, "error": "reviewer access required"};
             return;
         }
         if not self.pr_number {
