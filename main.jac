@@ -913,7 +913,9 @@ def:priv mint_session_token(login: str) -> str {
     if not user_id {
         return "";
     }
-    return str(um.create_jwt_token(user_id));
+    # include_role=False: skip the extra user-store role lookup — this app gates
+    # on live GitHub repo permission (has_write_access), not jac-scale roles.
+    return str(um.create_jwt_token(user_id, include_role=False));
 }
 
 
@@ -1544,9 +1546,16 @@ walker:pub GithubOAuthExchange {
             return;
         }
         gh_token = str(profile["token"]);
-        token = mint_session_token(str(profile["login"]));
+        try {
+            token = mint_session_token(str(profile["login"]));
+        } except Exception as e {
+            # Surface the real cause (jac-scale user store / Mongo / JWT) to the
+            # client instead of a generic failure, so prod issues are diagnosable.
+            report {"ok": False, "error": f"session error: {e}"};
+            return;
+        }
         if not token {
-            report {"ok": False, "error": "could not start session"};
+            report {"ok": False, "error": "could not start session (no user id)"};
             return;
         }
         # token: jac-scale session JWT (the browser stores it as `jac_token`, the
