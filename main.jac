@@ -807,6 +807,9 @@ glob ALLOWED_IMAGE_EXT = ["png", "jpg", "jpeg", "gif", "webp", "svg"];
 # finds submissions (we can't add a label as the contributor, so the body
 # marker is the index instead).
 glob SUBMISSION_TAG = "blog-submission";
+# Same idea for edits to ALREADY-PUBLISHED posts: stamped into the edit PR's body
+# so open edit PRs for a given slug are findable with one search (collision check).
+glob EDIT_TAG = "blog-edit";
 glob GH_API = "https://api.github.com";
 glob PREVIEW_TTL = 60 * 60 * 24 * 30;  # shareable draft previews live 1 month
 
@@ -1618,6 +1621,10 @@ def:priv parse_post_for_edit(content: str) -> dict {
     if not isinstance(categories, list) {
         categories = [categories];
     }
+    author_ids = meta.get("authors", []);
+    if not isinstance(author_ids, list) {
+        author_ids = [author_ids];
+    }
     title = str(meta.get("title", ""));
     if not title {
         h1 = re.search(r"(?m)^#\s+(.+)$", raw_body);
@@ -1627,9 +1634,218 @@ def:priv parse_post_for_edit(content: str) -> dict {
         "title": title,
         "slug": str(meta.get("slug", "")),
         "categories": [str(c) for c in categories],
+        "authors": [str(a) for a in author_ids],
         "description": str(meta.get("description", "")),
         "body_md": raw_body,
     };
+}
+
+
+def:priv find_post_path(slug: str) -> str | None {
+    # Posts identify by their frontmatter `slug:`, NOT their filename (files are
+    # snake_case, slugs kebab-case), so resolve the real repo path for a slug by
+    # scanning the posts dir. Falls back to a filename-stem match.
+    dir_path = Path(POSTS_DIR);
+    if not slug or not dir_path.exists() {
+        return None;
+    }
+    fallback = "";
+    for path in sorted(dir_path.glob("*.md")) {
+        if path.name.startswith("_") {
+            continue;
+        }
+        if path.stem == slug {
+            fallback = f"{POSTS_DIR}/{path.name}";
+        }
+        try {
+            text = path.read_text(encoding="utf-8");
+        } except Exception {
+            continue;
+        }
+        if text.startswith("---") {
+            parts = text.split("---", 2);
+            if len(parts) >= 3 {
+                try {
+                    meta = yaml.safe_load(parts[1]);
+                } except Exception {
+                    meta = None;
+                }
+                if isinstance(meta, dict) and str(meta.get("slug", "")) == slug {
+                    return f"{POSTS_DIR}/{path.name}";
+                }
+            }
+        }
+    }
+    return fallback if fallback else None;
+}
+
+
+def:priv fetch_main_post(token: str, slug: str) -> dict | None {
+    # Current markdown for a published post, read from the base branch (so a
+    # recent edit on main isn't missed). The path is resolved by slug — see
+    # find_post_path. Falls back to the local file if the API read is empty.
+    path = find_post_path(slug);
+    if path is None {
+        return None;
+    }
+    content = "";
+    try {
+        blob = requests.get(
+            f"{GH_API}/repos/{gh_repo()}/contents/{path}",
+            headers=gh_headers(token), params={"ref": gh_base_branch()}, timeout=30,
+        ).json();
+        content = base64.b64decode(str(blob.get("content", ""))).decode("utf-8");
+    } except Exception {
+        content = "";
+    }
+    if not content {
+        try {
+            content = Path(path).read_text(encoding="utf-8");
+        } except Exception {
+            return None;
+        }
+    }
+    return {"content": content, "post_path": path};
+}
+
+
+def:priv post_path_to_slug() -> dict[str, str] {
+    # Map each post's repo-relative path -> its frontmatter slug, so a PR's
+    # changed-file path can be associated back to a post (filename != slug).
+    out: dict[str, str] = {};
+    dir_path = Path(POSTS_DIR);
+    if not dir_path.exists() {
+        return out;
+    }
+    for path in sorted(dir_path.glob("*.md")) {
+        if path.name.startswith("_") {
+            continue;
+        }
+        slug = path.stem;
+        try {
+            text = path.read_text(encoding="utf-8");
+            if text.startswith("---") {
+                parts = text.split("---", 2);
+                if len(parts) >= 3 {
+                    meta = yaml.safe_load(parts[1]);
+                    if isinstance(meta, dict) and meta.get("slug") {
+                        slug = str(meta.get("slug"));
+                    }
+                }
+            }
+        } except Exception {
+            _ignore = None;
+        }
+        out[f"{POSTS_DIR}/{path.name}"] = slug;
+    }
+    return out;
+}
+
+
+def:priv open_edit_prs_by_slug(token: str) -> dict[str, list] {
+    # ALL open PRs that EDIT an existing post, grouped by the post's slug. Found by
+    # the file a PR changes (not a marker), so it picks up edit PRs opened through
+    # the portal AND directly on GitHub. (Submission PRs add a NEW file, which
+    # isn't in the path map, so they don't match — only edits to live posts do.)
+    grouped: dict[str, list] = {};
+    path_to_slug = post_path_to_slug();
+    try {
+        prs = requests.get(
+            f"{GH_API}/repos/{gh_repo()}/pulls",
+            headers=gh_headers(token),
+            params={"state": "open", "per_page": 100, "sort": "created", "direction": "desc"},
+            timeout=30,
+        ).json();
+    } except Exception {
+        return grouped;
+    }
+    if not isinstance(prs, list) {
+        return grouped;
+    }
+    for pr in prs {
+        n = int(pr.get("number", 0));
+        try {
+            files = requests.get(
+                f"{GH_API}/repos/{gh_repo()}/pulls/{n}/files",
+                headers=gh_headers(token), params={"per_page": 100}, timeout=30,
+            ).json();
+        } except Exception {
+            continue;
+        }
+        if not isinstance(files, list) {
+            continue;
+        }
+        touched: list = [];
+        for f in files {
+            fn = str(f.get("filename", ""));
+            if fn in path_to_slug {
+                s = str(path_to_slug[fn]);
+                if s not in touched {
+                    touched.append(s);
+                }
+            }
+        }
+        if not touched {
+            continue;
+        }
+        user = pr.get("user");
+        author = str(user.get("login", "")) if isinstance(user, dict) else "";
+        entry = {
+            "number": n,
+            "url": str(pr.get("html_url", "")),
+            "title": str(pr.get("title", "")),
+            "author": author,
+        };
+        for s in touched {
+            if s in grouped {
+                grouped[s].append(entry);
+            } else {
+                grouped[s] = [entry];
+            }
+        }
+    }
+    return grouped;
+}
+
+
+def:priv find_open_edit_prs(token: str, slug: str) -> list {
+    # Open edit PRs for one post — the collision check on the edit form.
+    return open_edit_prs_by_slug(token).get(slug, []);
+}
+
+
+def:priv build_edited_markdown(
+    original_content: str, title: str, categories: list, description: str, body: str
+) -> str {
+    # Rebuild a post's .md PRESERVING its frontmatter — date, authors, slug, and
+    # crucially the draft state (a live post has no draft key, so the edit stays
+    # live and deploys on merge) — while applying the edited categories,
+    # description, and body. Contrast build_post_markdown, which is for NEW drafts
+    # (date=today, draft:true).
+    meta: dict = {};
+    if original_content.startswith("---") {
+        parts = original_content.split("---", 2);
+        if len(parts) >= 3 {
+            try {
+                loaded = yaml.safe_load(parts[1]);
+                meta = loaded if isinstance(loaded, dict) else {};
+            } except Exception {
+                meta = {};
+            }
+        }
+    }
+    meta["categories"] = [str(c) for c in categories];
+    if description {
+        meta["description"] = description;
+    } else {
+        meta.pop("description", None);
+    }
+    fm = str(yaml.safe_dump(meta, sort_keys=False, allow_unicode=True)).strip();
+    body_text: str = body.strip();
+    if not body_text.startswith("#") {
+        body_text = f"# {title}\n\n{body_text}";
+    }
+    return f"---\n{fm}\n---\n\n{body_text}\n";
 }
 
 
@@ -1838,6 +2054,190 @@ walker:priv UpdatePost {
 }
 
 
+walker:priv ListEditablePosts {
+    # Published posts the caller may edit: reviewers (repo write) get every live
+    # post; everyone else gets only posts they're a registered author of.
+    has gh_enc: str = "";
+
+    can get with Root entry {
+        gh_token = decrypt_gh(self.gh_enc);
+        if not gh_token {
+            report {"ok": False, "error": "not signed in"};
+            return;
+        }
+        is_reviewer = has_write_access(gh_token);
+        my_author_id = "";
+        if not is_reviewer {
+            (my_author_id, _e) = resolve_author_id(gh_user(gh_token), "");
+        }
+        # All live posts come from the files on main (list_all_posts reads disk),
+        # so this covers posts published through the app AND by direct push.
+        # Open edit PRs are fetched once and attached per slug.
+        prs_by_slug = open_edit_prs_by_slug(gh_token);
+        out: list = [];
+        for p in list_all_posts() {
+            author_ids = [str(a["id"]) for a in p["authors"]];
+            if is_reviewer or (my_author_id and my_author_id in author_ids) {
+                slug = str(p["slug"]);
+                out.append({
+                    "slug": slug,
+                    "title": str(p["title"]),
+                    "date": str(p["date"]),
+                    "authors": author_ids,
+                    "edit_prs": prs_by_slug.get(slug, []),
+                });
+            }
+        }
+        report {"ok": True, "posts": out, "is_reviewer": is_reviewer};
+    }
+}
+
+
+walker:priv GetPublishedPostForEdit {
+    # Load a published post's current source into the edit form, and surface any
+    # open edit PRs for it (collision check).
+    has gh_enc: str = "";
+    has slug: str = "";
+
+    can get with Root entry {
+        gh_token = decrypt_gh(self.gh_enc);
+        if not gh_token {
+            report {"ok": False, "error": "not signed in"};
+            return;
+        }
+        if not self.slug {
+            report {"ok": False, "error": "missing slug"};
+            return;
+        }
+        main_post = fetch_main_post(gh_token, self.slug);
+        if main_post is None {
+            report {"ok": False, "error": "no published post with that slug"};
+            return;
+        }
+        fields = parse_post_for_edit(str(main_post["content"]));
+        if not has_write_access(gh_token) {
+            (my_author_id, _e) = resolve_author_id(gh_user(gh_token), "");
+            if not my_author_id or my_author_id not in fields["authors"] {
+                report {"ok": False, "error": "you can only edit posts you authored"};
+                return;
+            }
+        }
+        report {"ok": True, "existing_prs": find_open_edit_prs(gh_token, self.slug), **fields};
+    }
+}
+
+
+walker:priv EditPublishedPost {
+    # Open a NEW PR editing a published post (or add a commit to the caller's own
+    # open edit PR). The post stays live; frontmatter is preserved so merging just
+    # ships the edit.
+    has gh_enc: str = "";
+    has slug: str = "";
+    has title: str = "";
+    has categories: list = [];
+    has description: str = "";
+    has body_md: str = "";
+    has images: list = [];
+    has pr_number: int = 0;  # >0 = continue the caller's own open edit PR
+
+    can edit with Root entry {
+        gh_token = decrypt_gh(self.gh_enc);
+        if not gh_token {
+            report {"ok": False, "error": "not signed in"};
+            return;
+        }
+        profile = gh_user(gh_token);
+        login = str(profile.get("login", ""));
+        if not login {
+            report {"ok": False, "error": "not signed in"};
+            return;
+        }
+        slug = self.slug.strip().lower();
+        main_post = fetch_main_post(gh_token, slug);
+        if main_post is None {
+            report {"ok": False, "error": "no published post with that slug"};
+            return;
+        }
+        original = str(main_post["content"]);
+        if not has_write_access(gh_token) {
+            base_fields = parse_post_for_edit(original);
+            (my_author_id, _e) = resolve_author_id(profile, "");
+            if not my_author_id or my_author_id not in base_fields["authors"] {
+                report {"ok": False, "error": "you can only edit posts you authored"};
+                return;
+            }
+        }
+        title = self.title.strip();
+        if not title {
+            report {"ok": False, "error": "title is required"};
+            return;
+        }
+        cats = [str(c) for c in self.categories if str(c) in ALLOWED_CATEGORIES];
+        if not cats {
+            report {"ok": False, "error": "select at least one valid category"};
+            return;
+        }
+        if len(self.body_md.strip()) < 50 {
+            report {"ok": False, "error": "post body is too short"};
+            return;
+        }
+        img_res = collect_images(self.images, slug);
+        if not img_res["ok"] {
+            report {"ok": False, "error": img_res["error"]};
+            return;
+        }
+        post_md = build_edited_markdown(original, title, cats, self.description.strip(), self.body_md);
+        # Write back to the post's ACTUAL file (filename != slug), so the PR edits
+        # the existing post instead of creating a new file.
+        files = [{"path": str(main_post["post_path"]), "content": post_md, "binary": False}];
+        files = files + img_res["files"];
+
+        if self.pr_number {
+            # Continue the caller's OWN open edit PR (we can only push to own fork).
+            pr = fetch_pr_post(gh_token, self.pr_number);
+            if pr is None {
+                report {"ok": False, "error": "could not load that PR"};
+                return;
+            }
+            if str(pr["head_owner"]).lower() != login.lower() {
+                report {"ok": False, "error": "you can only add to your own edit PR"};
+                return;
+            }
+            if pr["state"] != "open" or pr["merged"] {
+                report {"ok": False, "error": "that PR is already merged or closed"};
+                return;
+            }
+            try {
+                commit_update(gh_token, str(pr["head_repo"]), str(pr["head_ref"]), files, f"Edit blog post: {title}");
+            } except Exception as e {
+                report {"ok": False, "error": f"could not save changes: {e}"};
+                return;
+            }
+            report {"ok": True, "pr_number": self.pr_number, "pr_url": str(pr["pr_url"]), "slug": slug};
+            return;
+        }
+
+        branch = f"edit/{slug}-{int(time.time())}";
+        marker = f"\n\n<!-- {EDIT_TAG} slug={slug} by={login} -->";
+        pr_body = (
+            "Edit to a published post via the /submit ▸ Edit a post form.\n\n"
+            + f"**Post:** {title} (`{slug}`)\n"
+            + f"**Editor:** @{login}\n\n"
+            + "The post stays live; merging publishes the edit. Frontmatter (date, "
+            + "authors, published status) is preserved."
+            + marker
+        );
+        try {
+            pr = submit_via_fork(gh_token, login, branch, files, f"Edit blog post: {title}", title, pr_body);
+        } except Exception as e {
+            report {"ok": False, "error": f"could not open edit PR: {e}"};
+            return;
+        }
+        report {"ok": True, "pr_number": int(pr["number"]), "pr_url": str(pr["html_url"]), "slug": slug};
+    }
+}
+
+
 walker:priv MySubmissions {
     has gh_enc: str = "";
 
@@ -1909,7 +2309,22 @@ walker:priv MySubmissions {
                 "created_at": str(it.get("created_at", "")),
             });
         }
-        report {"ok": True, "submissions": out};
+        # The author's own open edits to ALREADY-PUBLISHED posts (file-based, so
+        # it also catches edit PRs opened directly on GitHub).
+        my_edits: list = [];
+        for (eslug, eprs) in open_edit_prs_by_slug(gh_token).items() {
+            for epr in eprs {
+                if str(epr["author"]).lower() == login.lower() {
+                    my_edits.append({
+                        "slug": eslug,
+                        "number": epr["number"],
+                        "url": epr["url"],
+                        "title": epr["title"],
+                    });
+                }
+            }
+        }
+        report {"ok": True, "submissions": out, "edits": my_edits};
     }
 }
 
