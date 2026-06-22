@@ -407,6 +407,164 @@ img {
         display: none;
     }
 }
+
+/* Reference rail — mirrors the TOC but in the right gutter. A vertical spine
+   with a favicon dot per outbound link (GitHub / YouTube / external site);
+   cards expand as you scroll near their anchor (the active link + its two
+   neighbours, so at most three open at once), the rest stay as dots. Needs a
+   wider gutter than the TOC because the cards carry content, so it appears
+   only on roomier viewports. */
+.link-rail {
+    position: fixed;
+    top: 7.5rem;
+    left: calc((100vw + 720px) / 2 + 24px);
+    width: 264px;
+    max-height: calc(100vh - 11rem);
+    overflow-y: auto;
+    overflow-x: visible;
+    padding-left: 22px;
+    z-index: 5;
+}
+.link-rail::before {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 0.4rem;
+    bottom: 0.4rem;
+    width: 2px;
+    background: var(--rule);
+}
+.link-node {
+    position: relative;
+    margin: 0 0 0.45rem;
+    min-height: 18px;
+}
+.link-dot {
+    position: absolute;
+    left: -22px;
+    top: 0;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-elev);
+    border: 1px solid var(--rule);
+    overflow: hidden;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.link-dot-img {
+    width: 12px;
+    height: 12px;
+    object-fit: contain;
+    filter: grayscale(1);
+    opacity: 0.6;
+    transition: filter 0.15s ease, opacity 0.15s ease;
+}
+.link-node.is-active .link-dot {
+    border-color: var(--accent);
+    transform: scale(1.2);
+}
+.link-node.is-active .link-dot-img,
+.link-node.is-expanded .link-dot-img {
+    filter: none;
+    opacity: 1;
+}
+/* Collapsed by default → the rail reads as a timeline of dots until you
+   scroll near a link. */
+.link-card {
+    margin-left: 4px;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transform: translateY(-4px);
+    transition: max-height 0.25s ease, opacity 0.2s ease, transform 0.2s ease;
+}
+.link-node.is-expanded .link-card {
+    max-height: 460px;
+    opacity: 1;
+    transform: none;
+}
+.link-card-link {
+    display: block;
+    padding: 0.6rem 0.7rem;
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    background: var(--bg-elev);
+    box-shadow: var(--shadow-card);
+    text-decoration: none;
+    transition: border-color 0.15s ease;
+}
+.link-card-link:hover,
+.link-node.is-active .link-card-link {
+    border-color: var(--accent);
+}
+.link-card-host {
+    display: block;
+    font-family: var(--font-sans);
+    font-size: 0.625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-bottom: 0.2rem;
+}
+.link-card-title {
+    display: block;
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--text);
+}
+.link-card-desc {
+    margin-top: 0.25rem;
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: var(--text-muted);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.link-card-meta {
+    display: inline-block;
+    margin-top: 0.35rem;
+    font-family: var(--font-sans);
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+}
+.link-embed {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    margin-bottom: 0.4rem;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #000;
+}
+.link-embed iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+    .link-card,
+    .link-dot,
+    .link-dot-img {
+        transition: none;
+    }
+}
+@media (max-width: 1319px) {
+    .link-rail {
+        display: none;
+    }
+}
 .post-header {
     margin-bottom: 2.5rem;
 }
