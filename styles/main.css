@@ -417,8 +417,8 @@ img {
 .link-rail {
     position: fixed;
     top: 7.5rem;
-    left: calc((100vw + 720px) / 2 + 24px);
-    width: 264px;
+    left: calc((100vw + 720px) / 2 + 20px);
+    width: 236px;
     max-height: calc(100vh - 11rem);
     overflow-y: auto;
     overflow-x: visible;
@@ -441,25 +441,26 @@ img {
 }
 .link-dot {
     position: absolute;
-    left: -22px;
+    left: -23px;
     top: 0;
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     background: var(--bg-elev);
-    border: 1px solid var(--rule);
+    border: 1.5px solid var(--text-muted);
+    box-shadow: 0 0 0 3px var(--bg);
     overflow: hidden;
     transition: transform 0.15s ease, border-color 0.15s ease;
 }
 .link-dot-img {
-    width: 12px;
-    height: 12px;
+    width: 13px;
+    height: 13px;
     object-fit: contain;
     filter: grayscale(1);
-    opacity: 0.6;
+    opacity: 0.75;
     transition: filter 0.15s ease, opacity 0.15s ease;
 }
 .link-node.is-active .link-dot {
@@ -560,7 +561,7 @@ img {
         transition: none;
     }
 }
-@media (max-width: 1319px) {
+@media (max-width: 1239px) {
     .link-rail {
         display: none;
     }

@@ -649,16 +649,16 @@ glob LINK_RAIL_SKIP = ["jaseci.org", "blogs.jaseci.org", "jac-lang.org", "jaclan
 def classify_link(href: str) -> dict {
     # Returns {type, host}; type is "" for links that should not get a card.
     blank = {"type": "", "host": ""};
-    try {
-        u = URL(href, window.location.href) as any;
-    } except Exception {
-        return blank;
-    }
-    proto = str(u.protocol or "");
+    # Parse via an anchor element: Jac emits a plain `URL(...)` call, but the
+    # browser's URL is a constructor and throws without `new`. Setting an
+    # anchor's href resolves relative links and exposes the parsed parts.
+    parser = document.createElement("a") as any;
+    parser.href = href;
+    proto = str(parser.protocol or "");
     if (proto != "http:") and (proto != "https:") {
         return blank;
     }
-    host = str(u.hostname or "").lower();
+    host = str(parser.hostname or "").lower();
     if host.startswith("www.") {
         host = host[4:];
     }
@@ -666,7 +666,7 @@ def classify_link(href: str) -> dict {
     if (host == cur) or (host in LINK_RAIL_SKIP) or host.endswith(".jaseci.org") {
         return blank;
     }
-    segs = [s for s in str(u.pathname or "").split("/") if s];
+    segs = [s for s in str(parser.pathname or "").split("/") if s];
     if (host == "github.com") and (len(segs) >= 2) {
         return {"type": "github", "host": host};
     }
@@ -695,8 +695,13 @@ def build_link_rail(container: any) -> list {
         if not info["type"] {
             continue;
         }
-        ref_id = "lnk-" + str(i);
-        a.setAttribute("data-link-ref", ref_id);
+        # Give the anchor an id so the scrollspy can locate it via
+        # getElementById; reuse an existing id rather than clobber it.
+        existing = str(a.getAttribute("id") or "");
+        ref_id = existing if existing else ("lnk-" + str(i));
+        if not existing {
+            a.setAttribute("id", ref_id);
+        }
         out.append({
             "id": ref_id,
             "type": str(info["type"]),
@@ -738,6 +743,9 @@ def setup_link_rail_scrollspy() -> None {
             }
             idx = idx + 1;
         }
+        # Before the first link scrolls into view, anchor the expansion on the
+        # first card so the rail shows content (not just dots) at the top.
+        focus = active if (active >= 0) else 0;
         idx2 = 0;
         for el in nodes {
             if idx2 == active {
@@ -745,7 +753,7 @@ def setup_link_rail_scrollspy() -> None {
             } else {
                 el.classList.remove("is-active");
             }
-            if (active >= 0) and (abs(idx2 - active) <= 1) {
+            if abs(idx2 - focus) <= 1 {
                 el.classList.add("is-expanded");
             } else {
                 el.classList.remove("is-expanded");
@@ -802,7 +810,7 @@ def render_link_card(item: any, meta: any) -> JsxElement {
         <span className="link-card-host">{label}</span>
         <span className="link-card-title">{title or host}</span>
         {desc and <span className="link-card-desc">{desc}</span>}
-        {(t == "github") and stars and (stars > 0) and (
+        {(t == "github") and (stars > 0) and (
             <span className="link-card-meta">{"★ " + str(stars)}</span>
         )}
     </a>;
