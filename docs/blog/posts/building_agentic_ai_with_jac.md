@@ -1,10 +1,10 @@
 ---
 date: 2026-05-12
 authors:
-  - jayanaka
+- jayanaka
 categories:
-  - Jac Programming
-  - AI
+- Jac Programming
+- AI
 slug: building-agentic-ai-with-jac
 ---
 
@@ -14,7 +14,7 @@ Most of an agent codebase is not the agent. It is the supporting code every deve
 
 <!-- more -->
 
-## The Problem
+## The Problem 
 
 **The same intent gets written twice.** A tool is a function *and* a JSON schema describing it. A structured output is a Pydantic class *and* a `response_format` argument. If we rename the function but forget the JSON spec, the spec still advertises the old name to the model. If we rename a field but forget the prompt that asks for it, the prompt still references the old one. Nothing in the build catches the mismatch, because the link between the code and the string only exists in the developer's head. Drift is silent until the model misbehaves at runtime.
 
@@ -32,7 +32,7 @@ The answer is already in the [**Jac**](https://docs.jaseci.org/) programming lan
 
 !!! info "About the code"
 
-    Every Jac snippet below is self-contained and runs with `jac run <file>.jac` against a configured model. Copy any block, save it, and you'll see the agent execute end-to-end.
+    Every Jac snippet below runs with `jac run <file>.jac` once a model is bound to `llm` — either project-wide in `jac.toml` or per file with `import from byllm.llm { Model }` and `glob llm = Model(model_name="openai/gpt-4o-mini");`. Complete, runnable versions of all seven patterns live in the companion repo: [**github.com/Jayanaka-98/agentic-ai-with-jac**](https://github.com/Jayanaka-98/agentic-ai-with-jac).
 
 <!-- ---
 
@@ -234,10 +234,17 @@ node Examples { def run(draft: str) -> str by llm(); }
 node Summary  { def run(detail: str) -> str by llm(); }
 node Done     {}
 
+sem Draft.run    = "Write a first-draft technical explanation of the topic.";
+sem Examples.run = "Revise the draft, weaving in concrete worked examples.";
+sem Summary.run  = "Condense the text into a tight 3-4 sentence summary.";
+
 walker Explainer {
     has topic: str;
     has text: str = "";
 
+    can begin with Root entry {
+        visit [-->];
+    }
     can do_draft with Draft entry {
         self.text = here.run(self.topic);
         visit [-->];
@@ -331,11 +338,19 @@ node Evaluate { def run(draft: str, topic: str) -> Review by llm(); }
 node Revise   { def run(draft: str, feedback: str) -> str by llm(); }
 node Approved {}
 
+sem Draft.run    = "Write a first-draft tutorial section on the topic.";
+sem Evaluate.run = "Critique the draft as a tutorial on the topic and return a typed verdict.";
+sem Revise.run   = "Rewrite the draft to address the feedback.";
+
 walker TutorialWriter {
     has topic: str;
     has draft: str = "";
     has feedback: str = "";
     has version: int = 1;
+
+    can begin with Root entry {
+        visit [-->];
+    }
 
     can do_draft with Draft entry {
         self.draft = here.run(self.topic);
@@ -393,6 +408,8 @@ walker HardwareResearcher {
         self.result = self.investigate(self.topic);
     }
 }
+sem HardwareResearcher.investigate = "Research the topic from a hardware angle using the tools.";
+
 walker SoftwareResearcher {
     has topic: str;
     has result: str = "";
@@ -401,6 +418,8 @@ walker SoftwareResearcher {
         self.result = self.investigate(self.topic);
     }
 }
+sem SoftwareResearcher.investigate = "Research the topic from a software angle using the tools.";
+
 walker AIResearcher {
     has topic: str;
     has result: str = "";
@@ -409,24 +428,31 @@ walker AIResearcher {
         self.result = self.investigate(self.topic);
     }
 }
+sem AIResearcher.investigate = "Research the topic from an AI/ML angle using the tools.";
 
 walker SurveyAgent {
     has topic: str;
     has response: str = "";
-    def synthesize(topic: str, hw: str, sw: str, ai: str) -> str by llm();
+    def synthesize(
+        topic: str,
+        hw: HardwareResearcher,
+        sw: SoftwareResearcher,
+        ai: AIResearcher
+    ) -> str by llm();
 
     can start with Root entry {
         hw_task = flow root spawn HardwareResearcher(topic=self.topic);
         sw_task = flow root spawn SoftwareResearcher(topic=self.topic);
         ai_task = flow root spawn AIResearcher(topic=self.topic);
 
-        hw: any = wait hw_task;
-        sw: any = wait sw_task;
-        ai: any = wait ai_task;
+        hw: HardwareResearcher = (wait hw_task) as HardwareResearcher;
+        sw: SoftwareResearcher = (wait sw_task) as SoftwareResearcher;
+        ai: AIResearcher = (wait ai_task) as AIResearcher;
 
-        self.response = self.synthesize(self.topic, hw.result, sw.result, ai.result);
+        self.response = self.synthesize(self.topic, hw, sw, ai);
     }
 }
+sem SurveyAgent.synthesize = "Combine the hardware, software, and AI research notes into one survey.";
 
 with entry {
     root spawn SurveyAgent(topic="Efficient inference for large language models");
@@ -460,3 +486,7 @@ Those languages weren't chosen because they fit agents. They were chosen for eco
 !!! quote ""
 
     **With these patterns in the language, building an agent is just building the agent.**
+
+<div style="position: relative; width: 100%; padding-bottom: 56.25%; margin: 1.5em 0;">
+  <iframe style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" src="https://www.youtube.com/embed/jk1OUyNnHpk?si=pVUxxajZkpf0d-zK" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+</div>
