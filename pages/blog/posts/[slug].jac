@@ -684,6 +684,7 @@ def build_link_rail(container: any) -> list {
     # Anchors AND embedded iframes (e.g. a YouTube <iframe> dropped into the
     # post), walked in document order.
     els = container.querySelectorAll("a[href], iframe[src]") as any;
+    seen = {};
     i = 0;
     for el in els {
         is_iframe = (str(el.tagName or "").upper() == "IFRAME");
@@ -703,6 +704,13 @@ def build_link_rail(container: any) -> list {
         if is_iframe and (str(info["type"]) != "youtube") {
             continue;
         }
+        # Only the first occurrence of a given link earns a dot on the timeline;
+        # later repeats are skipped (keyed by the resolved URL).
+        resolved = str((el.src if is_iframe else el.href) or raw);
+        if resolved in seen {
+            continue;
+        }
+        seen[resolved] = True;
         # Give the element an id so the scrollspy can locate it via
         # getElementById; reuse an existing id rather than clobber it.
         existing = str(el.getAttribute("id") or "");
@@ -713,7 +721,7 @@ def build_link_rail(container: any) -> list {
         out.append({
             "id": ref_id,
             "type": str(info["type"]),
-            "href": str((el.src if is_iframe else el.href) or raw),
+            "href": resolved,
             "host": str(info["host"]),
         });
         i = i + 1;
