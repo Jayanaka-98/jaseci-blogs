@@ -8,7 +8,7 @@ categories:
 slug: building-agentic-ai-with-jac
 ---
 
-# Agentic AI with Jac: A Programming Language That Knows What an Agent Is
+# Building Agentic AI with Jac: A Programming Language Designed for Agent
 
 Most of an agent codebase is not the agent. It is the supporting code every developer writes from scratch, because the languages we use were never designed for agents.
 
