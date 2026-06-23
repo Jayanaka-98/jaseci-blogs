@@ -1485,6 +1485,14 @@ def:priv render_submitted_markdown(text: str, raw_repo: str, raw_sha: str) -> di
     body = convert_mermaid_fences(body);
     body = inject_markdown_attr(body);
     html = render_markdown(body);
+    # Repost card: parse the frontmatter keys and fetch the external article's
+    # metadata so previews show the same card the live post page renders.
+    repost_url = str(meta.get("repost_url", "")).strip();
+    is_repost = bool(meta.get("repost", False)) and bool(repost_url);
+    repost_meta: dict = {};
+    if is_repost {
+        repost_meta = link_meta(repost_url);
+    }
     return {
         "title": title,
         "slug": str(meta.get("slug", "")),
@@ -1494,6 +1502,10 @@ def:priv render_submitted_markdown(text: str, raw_repo: str, raw_sha: str) -> di
         "draft": bool(meta.get("draft", False)),
         "reading_minutes": estimate_reading_minutes(raw_body),
         "html": html,
+        "is_repost": is_repost,
+        "repost_url": repost_url,
+        "repost_source": str(meta.get("repost_source", "")),
+        "repost_meta": repost_meta,
     };
 }
 
@@ -1592,6 +1604,10 @@ def:priv preview_payload(rendered: dict) -> dict {
         "next": None,
         "related": [],
         "is_preview": True,
+        "is_repost": bool(rendered["is_repost"]),
+        "repost_url": str(rendered["repost_url"]),
+        "repost_source": str(rendered["repost_source"]),
+        "repost_meta": rendered["repost_meta"],
     };
 }
 
