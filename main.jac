@@ -45,6 +45,22 @@ cl {
                 icon.href = "https://www.jaseci.org/images/logo.png";
                 document.head.appendChild(icon);
             }
+            # Google Analytics (gtag.js). Injected once at the app root so the
+            # tag loads on every route. Idempotent guard keeps a remount from
+            # double-adding it. GA4 enhanced measurement tracks SPA route
+            # changes via History events, so no per-navigation page_view here.
+            existing_ga = document.querySelector("script[data-ga='G-RCKQSQP438']");
+            if not existing_ga {
+                ga_loader = document.createElement("script");
+                ga_loader.setAttribute("async", "");
+                ga_loader.src = "https://www.googletagmanager.com/gtag/js?id=G-RCKQSQP438";
+                ga_loader.setAttribute("data-ga", "G-RCKQSQP438");
+                document.head.appendChild(ga_loader);
+
+                ga_init = document.createElement("script");
+                ga_init.text = "window.dataLayer = window.dataLayer || [];\nfunction gtag(){dataLayer.push(arguments);}\ngtag('js', new Date());\ngtag('config', 'G-RCKQSQP438');";
+                document.head.appendChild(ga_init);
+            }
         }
         return <>{props.children}</>;
     }
