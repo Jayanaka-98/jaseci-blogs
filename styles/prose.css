@@ -593,7 +593,11 @@
     color: var(--text);
 }
 .runnable-editor-host .CodeMirror-gutters {
-    background: transparent;
+    /* Opaque, matching the editor background — the gutter is pinned (fixedGutter)
+       while the code scrolls under it. A transparent gutter let horizontally
+       scrolled code bleed through behind the line numbers, looking like a
+       collision. An opaque fill keeps the number column clean during h-scroll. */
+    background: var(--code-bg);
     border-right: 1px solid var(--code-border);
 }
 .runnable-editor-host .CodeMirror-linenumber {
