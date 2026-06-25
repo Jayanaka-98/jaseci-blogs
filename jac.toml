@@ -95,8 +95,16 @@ SUBMIT_SESSION_SECRET = "${SUBMIT_SESSION_SECRET}"
 # clients that `jac start --scale` needs (the `data` extra alone does not).
 # [data] adds pymongo + redis clients for the auto-provisioned MongoDB/Redis
 # (mongodb_enabled/redis_enabled above), used to persist shareable previews.
-"jac-scale[deploy,data]" = ">=0.2.23"
-jac-client = "*"
+# PINNED (was "jac-scale[deploy,data]" >=0.2.23 / jac-client "*"). The runner's
+# jac-scale version generates the pod manifest; newer releases switched the pod
+# to a boot-time jac binary installer that resolves "latest" from GitHub Releases
+# and crash-loops ("Could not determine latest version from GitHub Releases").
+# Pinned to the last pre-breakage set (all 2026-06-03), still >=0.2.23 so the
+# shared-ingress ALB support is retained. Keep in lockstep with jaclang==0.16.0
+# in .github/workflows/deploy.yml. To re-pin to your last green deploy, read its
+# "Install Jac toolchain" step: "Successfully installed jaclang-X jac-scale-Y …".
+"jac-scale[deploy,data]" = "==0.2.23"
+jac-client = "==0.3.21"
 markdown = ">=3.5"
 pyyaml = ">=6.0"
 pygments = ">=2.17"
