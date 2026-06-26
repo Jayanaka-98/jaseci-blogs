@@ -1,4 +1,8 @@
 authors:
+  jaseci-team:
+    name: Jaseci Team
+    description: The Jaseci Labs team — official posts, announcements, and roundups.
+    avatar: https://avatars.githubusercontent.com/u/93342614?v=4
   mars:
     name: Jason Mars
     description: Creator of Jac, Enjoyer of beautiful tech, The ninja professor.

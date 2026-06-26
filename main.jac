@@ -456,6 +456,14 @@ def:priv parse_post_file(path: Path, registry: dict) -> dict | None {
 
     description = str(meta.get("description", ""));
 
+    # Repost support: a post can be a short write-up that links out to an
+    # external article. `repost: true` is the author-facing "checkbox"; the
+    # external link lives in `repost_url`. A post only counts as a repost if it
+    # actually carries a link — the checkbox alone does nothing.
+    repost_url = str(meta.get("repost_url", "")).strip();
+    is_repost = bool(meta.get("repost", False)) and bool(repost_url);
+    repost_source = str(meta.get("repost_source", "")).strip();
+
     return {
         "slug": slug,
         "filename": path.stem,
@@ -471,6 +479,9 @@ def:priv parse_post_file(path: Path, registry: dict) -> dict | None {
         "body_md": full_md_html_ready,
         "reading_minutes": estimate_reading_minutes(raw_body),
         "cover": str(meta.get("cover", "")),
+        "is_repost": is_repost,
+        "repost_url": repost_url,
+        "repost_source": repost_source,
     };
 }
 
@@ -520,6 +531,9 @@ def:priv post_summary(post: dict) -> dict {
         "peek_html": peek_html,
         "reading_minutes": post["reading_minutes"],
         "cover": post["cover"],
+        "is_repost": post["is_repost"],
+        "repost_url": post["repost_url"],
+        "repost_source": post["repost_source"],
     };
 }
 
@@ -676,6 +690,14 @@ walker:pub GetPost {
 
         html = render_markdown(found["body_md"]);
 
+        # For reposts, fetch the external article's card metadata (og:title,
+        # description, image) so the page can render a rich link card up top on
+        # first paint. link_meta is cached and never raises.
+        repost_meta: dict = {};
+        if found["is_repost"] and found["repost_url"] {
+            repost_meta = link_meta(str(found["repost_url"]));
+        }
+
         # Adjacent posts (prev/next by date).
         all_posts = list_all_posts();
         prev_post = None;
@@ -734,6 +756,10 @@ walker:pub GetPost {
             "prev": prev_post,
             "next": next_post,
             "related": related,
+            "is_repost": found["is_repost"],
+            "repost_url": found["repost_url"],
+            "repost_source": found["repost_source"],
+            "repost_meta": repost_meta,
         };
     }
 }
@@ -1303,6 +1329,9 @@ def:priv load_scheduled_slugs() -> dict {
 }
 
 
+glob TEAM_AUTHOR_ID = "jaseci-team";  # shared byline; reviewers only (see .authors.yml)
+
+
 def:priv resolve_author_id(profile: dict, bio: str) -> tuple {
     # Returns (author_id, new_entry_or_None). Reuse an existing .authors.yml
     # entry whose avatar references this GitHub numeric id, or whose key matches
@@ -1333,9 +1362,16 @@ def:priv resolve_author_id(profile: dict, bio: str) -> tuple {
 }
 
 
+def:priv is_http_url(u: str) -> bool {
+    s = u.strip().lower();
+    return s.startswith("http://") or s.startswith("https://");
+}
+
+
 def:priv build_post_markdown(
     title: str, slug: str, categories: list, description: str,
-    author_id: str, body: str
+    author_id: str, body: str,
+    is_repost: bool = False, repost_url: str = "", repost_source: str = ""
 ) -> str {
     today = date_cls.today().isoformat();
     lines: list = ["---", f"date: {today}", "authors:", f"  - {author_id}", "categories:"];
@@ -1346,6 +1382,15 @@ def:priv build_post_markdown(
         lines.append(f"description: {json.dumps(description)}");
     }
     lines.append(f"slug: {slug}");
+    # A repost links out to an external article via these keys (parsed back into
+    # is_repost/repost_url/repost_source). Only emitted when a URL is present.
+    if is_repost and repost_url.strip() {
+        lines.append("repost: true");
+        lines.append(f"repost_url: {json.dumps(repost_url.strip())}");
+        if repost_source.strip() {
+            lines.append(f"repost_source: {json.dumps(repost_source.strip())}");
+        }
+    }
     lines.append("draft: true");
     lines.append("---");
     fm = "\n".join(lines);
@@ -1548,6 +1593,14 @@ def:priv render_submitted_markdown(text: str, raw_repo: str, raw_sha: str) -> di
     body = convert_mermaid_fences(body);
     body = inject_markdown_attr(body);
     html = render_markdown(body);
+    # Repost card: parse the frontmatter keys and fetch the external article's
+    # metadata so previews show the same card the live post page renders.
+    repost_url = str(meta.get("repost_url", "")).strip();
+    is_repost = bool(meta.get("repost", False)) and bool(repost_url);
+    repost_meta: dict = {};
+    if is_repost {
+        repost_meta = link_meta(repost_url);
+    }
     return {
         "title": title,
         "slug": str(meta.get("slug", "")),
@@ -1557,6 +1610,10 @@ def:priv render_submitted_markdown(text: str, raw_repo: str, raw_sha: str) -> di
         "draft": bool(meta.get("draft", False)),
         "reading_minutes": estimate_reading_minutes(raw_body),
         "html": html,
+        "is_repost": is_repost,
+        "repost_url": repost_url,
+        "repost_source": str(meta.get("repost_source", "")),
+        "repost_meta": repost_meta,
     };
 }
 
@@ -1655,6 +1712,10 @@ def:priv preview_payload(rendered: dict) -> dict {
         "next": None,
         "related": [],
         "is_preview": True,
+        "is_repost": bool(rendered["is_repost"]),
+        "repost_url": str(rendered["repost_url"]),
+        "repost_source": str(rendered["repost_source"]),
+        "repost_meta": rendered["repost_meta"],
     };
 }
 
@@ -2085,6 +2146,7 @@ def:priv parse_post_for_edit(content: str) -> dict {
         h1 = re.search(r"(?m)^#\s+(.+)$", raw_body);
         title = strip_markdown_inline(h1.group(1).strip()) if h1 else "";
     }
+    repost_url = str(meta.get("repost_url", "")).strip();
     return {
         "title": title,
         "slug": str(meta.get("slug", "")),
@@ -2092,6 +2154,9 @@ def:priv parse_post_for_edit(content: str) -> dict {
         "authors": [str(a) for a in author_ids],
         "description": str(meta.get("description", "")),
         "body_md": raw_body,
+        "is_repost": bool(meta.get("repost", False)) and bool(repost_url),
+        "repost_url": repost_url,
+        "repost_source": str(meta.get("repost_source", "")),
     };
 }
 
@@ -2340,7 +2405,9 @@ def:priv open_submission_prs(token: str) -> list {
 
 
 def:priv build_edited_markdown(
-    original_content: str, title: str, categories: list, description: str, body: str
+    original_content: str, title: str, categories: list, description: str, body: str,
+    is_repost: bool = False, repost_url: str = "", repost_source: str = "",
+    author_override: str = ""
 ) -> str {
     # Rebuild a post's .md PRESERVING its frontmatter — date, authors, slug, and
     # crucially the draft state (a live post has no draft key, so the edit stays
@@ -2365,6 +2432,25 @@ def:priv build_edited_markdown(
     } else {
         meta.pop("description", None);
     }
+    # Reviewer re-attribution: swap the byline to the shared team author.
+    if author_override {
+        meta["authors"] = [author_override];
+    }
+    # Toggle repost keys to match the form: set them when checked + a URL is
+    # given, otherwise strip any that were there (the post is no longer a repost).
+    if is_repost and repost_url.strip() {
+        meta["repost"] = True;
+        meta["repost_url"] = repost_url.strip();
+        if repost_source.strip() {
+            meta["repost_source"] = repost_source.strip();
+        } else {
+            meta.pop("repost_source", None);
+        }
+    } else {
+        meta.pop("repost", None);
+        meta.pop("repost_url", None);
+        meta.pop("repost_source", None);
+    }
     fm = str(yaml.safe_dump(meta, sort_keys=False, allow_unicode=True)).strip();
     body_text: str = body.strip();
     if not body_text.startswith("#") {
@@ -2383,6 +2469,10 @@ walker:priv SubmitPost {
     has body_md: str = "";
     has author_bio: str = "";
     has images: list = [];
+    has is_repost: bool = False;
+    has repost_url: str = "";
+    has repost_source: str = "";
+    has as_team: bool = False;  # reviewers only: publish under the shared byline
 
     can submit with Root entry {
         gh_token = decrypt_gh(self.gh_enc);
@@ -2420,6 +2510,15 @@ walker:priv SubmitPost {
             report {"ok": False, "error": "select at least one valid category"};
             return;
         }
+        repost_url = self.repost_url.strip();
+        if self.is_repost and not repost_url {
+            report {"ok": False, "error": "a repost needs the original article URL"};
+            return;
+        }
+        if self.is_repost and not is_http_url(repost_url) {
+            report {"ok": False, "error": "the repost URL must be an http(s) link"};
+            return;
+        }
         img_res = collect_images(self.images, slug);
         if not img_res["ok"] {
             report {"ok": False, "error": img_res["error"]};
@@ -2428,7 +2527,16 @@ walker:priv SubmitPost {
         image_files = img_res["files"];
 
         (author_id, new_entry) = resolve_author_id(profile, self.author_bio.strip());
-        post_md = build_post_markdown(title, slug, cats, self.description.strip(), author_id, body);
+        # Shared "Jaseci Team" byline — reviewers only. The shared entry already
+        # lives in .authors.yml, so no new author entry is created.
+        if self.as_team and has_write_access(gh_token) {
+            author_id = TEAM_AUTHOR_ID;
+            new_entry = None;
+        }
+        post_md = build_post_markdown(
+            title, slug, cats, self.description.strip(), author_id, body,
+            self.is_repost, repost_url, self.repost_source.strip(),
+        );
         files = [{"path": f"docs/blog/posts/{slug}.md", "content": post_md, "binary": False}];
         files = files + image_files;
         if new_entry is not None {
@@ -2508,6 +2616,10 @@ walker:priv UpdatePost {
     has description: str = "";
     has body_md: str = "";
     has images: list = [];
+    has is_repost: bool = False;
+    has repost_url: str = "";
+    has repost_source: str = "";
+    has as_team: bool = False;  # reviewers only: publish under the shared byline
 
     can update with Root entry {
         gh_token = decrypt_gh(self.gh_enc);
@@ -2555,6 +2667,11 @@ walker:priv UpdatePost {
             report {"ok": False, "error": "select at least one valid category"};
             return;
         }
+        repost_url = self.repost_url.strip();
+        if self.is_repost and not is_http_url(repost_url) {
+            report {"ok": False, "error": "a repost needs a valid http(s) article URL"};
+            return;
+        }
         img_res = collect_images(self.images, slug);
         if not img_res["ok"] {
             report {"ok": False, "error": img_res["error"]};
@@ -2564,7 +2681,13 @@ walker:priv UpdatePost {
         # Resolve the author's id (reuses their existing .authors.yml entry);
         # don't re-touch .authors.yml on edit — the entry already exists.
         (author_id, _new) = resolve_author_id(profile, "");
-        post_md = build_post_markdown(title, slug, cats, self.description.strip(), author_id, body);
+        if self.as_team and has_write_access(gh_token) {
+            author_id = TEAM_AUTHOR_ID;
+        }
+        post_md = build_post_markdown(
+            title, slug, cats, self.description.strip(), author_id, body,
+            self.is_repost, repost_url, self.repost_source.strip(),
+        );
         files = [{"path": f"docs/blog/posts/{slug}.md", "content": post_md, "binary": False}];
         files = files + img_res["files"];
 
@@ -2664,6 +2787,10 @@ walker:priv EditPublishedPost {
     has body_md: str = "";
     has images: list = [];
     has pr_number: int = 0;  # >0 = continue the caller's own open edit PR
+    has is_repost: bool = False;
+    has repost_url: str = "";
+    has repost_source: str = "";
+    has as_team: bool = False;  # reviewers only: re-attribute to the shared byline
 
     can edit with Root entry {
         gh_token = decrypt_gh(self.gh_enc);
@@ -2706,12 +2833,24 @@ walker:priv EditPublishedPost {
             report {"ok": False, "error": "post body is too short"};
             return;
         }
+        repost_url = self.repost_url.strip();
+        if self.is_repost and not is_http_url(repost_url) {
+            report {"ok": False, "error": "a repost needs a valid http(s) article URL"};
+            return;
+        }
         img_res = collect_images(self.images, slug);
         if not img_res["ok"] {
             report {"ok": False, "error": img_res["error"]};
             return;
         }
-        post_md = build_edited_markdown(original, title, cats, self.description.strip(), self.body_md);
+        author_override = "";
+        if self.as_team and has_write_access(gh_token) {
+            author_override = TEAM_AUTHOR_ID;
+        }
+        post_md = build_edited_markdown(
+            original, title, cats, self.description.strip(), self.body_md,
+            self.is_repost, repost_url, self.repost_source.strip(), author_override,
+        );
         # Write back to the post's ACTUAL file (filename != slug), so the PR edits
         # the existing post instead of creating a new file.
         files = [{"path": str(main_post["post_path"]), "content": post_md, "binary": False}];
