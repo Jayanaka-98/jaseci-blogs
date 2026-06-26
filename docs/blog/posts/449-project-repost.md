@@ -26,9 +26,9 @@ Building a full AI application usually means stitching together separate systems
 
 The single-language design is a big reason a semester was enough. Jac and the Jaseci runtime let a team handle the interface, the application logic, the data, and the AI itself in one language. AI calls are part of the language rather than a bolted-on service, and Jac stays model-agnostic underneath, so teams could reach for whatever model fit without re-architecting anything. Less time on plumbing, more on the actual problem.
 
-## A few from the showcase
+## From the showcase
 
-The range shows what Jaseci made possible. Three very different products, all shipped on a student timeline:
+The range shows what Jaseci made possible. Here are three standouts:
 
 [**Skooch.ai**](http://skooch.ai) is an adaptive scheduling assistant that learns someone's focus windows and energy patterns, then places flexible tasks around fixed commitments from a plain-language prompt like "build me a study plan."
 
