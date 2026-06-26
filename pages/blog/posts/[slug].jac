@@ -853,10 +853,12 @@ def render_link_card(item: any, meta: any) -> JsxElement {
 }
 
 
-def render_repost_card(post: any) -> JsxElement {
+def render_repost_card(post: any, fallback_img: str = "") -> JsxElement {
     # The prominent "Originally published elsewhere" card shown at the top of a
     # repost. Metadata (title/description/image) is fetched server-side in
     # GetPost via link_meta; we fall back gracefully when it's missing.
+    # fallback_img is a client-side unfurl result used when the server couldn't
+    # resolve the og:image (see the microlink fallback in the route effect).
     url = str(post["repost_url"]);
     meta: any = post["repost_meta"] or {};
     host = str(meta.get("host") or "");
@@ -874,7 +876,7 @@ def render_repost_card(post: any) -> JsxElement {
     source = str(post["repost_source"]) or host or "the original site";
     ext_title = str(meta.get("title") or "");
     ext_desc = str(meta.get("description") or "");
-    img = str(meta.get("image") or "");
+    img = str(meta.get("image") or "") or fallback_img;
     return <aside className="repost-card">
         <a className="repost-card-link" href={url} target="_blank" rel="noopener noreferrer">
             {img and (
@@ -1262,6 +1264,7 @@ def:pub page() -> JsxElement {
     has pending_title: str = "";
     has share_copied: bool = False;
     has share_open: bool = False;
+    has repost_img: str = "";
 
     async can with [slug] entry {
         window.scrollTo(0, 0);
@@ -1270,6 +1273,8 @@ def:pub page() -> JsxElement {
         status = "";
         pending_title = "";
         post = None;
+        repost_img = "";
+        unfurl_url = "";
         start: int = int(Date.now());
         # Optional draft-preview token from the URL (?preview=<token>): lets an
         # unpublished post render in full via a shared, persisted snapshot.
@@ -1308,6 +1313,15 @@ def:pub page() -> JsxElement {
                         _ignore = None;
                     }
                     set_social_meta(str(data["title"]), meta_desc, meta_url, str(data["cover"]));
+                    # Note whether the repost card needs a client-side image
+                    # unfurl. Read the local `data`, not the reactive `post`
+                    # (which is stale within this same effect block).
+                    if bool(data["is_repost"]) {
+                        rmeta_l: any = data["repost_meta"] or {};
+                        if not str(rmeta_l.get("image") or "") {
+                            unfurl_url = str(data["repost_url"] or "");
+                        }
+                    }
                 } else {
                     error = str(data["error"]);
                     # Read into a local first: reading the reactive `has` back in
@@ -1335,6 +1349,34 @@ def:pub page() -> JsxElement {
             setTimeout(lambda -> None { loading = False; }, remaining);
         } else {
             loading = False;
+        }
+
+        # Client-side unfurl fallback for the repost card image. The server's
+        # link_meta() runs from the EKS pod, whose datacenter IP some sources'
+        # WAFs 403 (e.g. cse.engin.umich.edu) — so the og:image comes back empty
+        # in prod even though it resolves fine in local dev. Here we re-fetch it
+        # from the reader's browser via microlink: microlink fetches the page
+        # from its own infra (passes the WAF) and returns JSON with CORS headers
+        # (Access-Control-Allow-Origin: *), so the browser can read it; the
+        # resulting <img> then loads cross-origin normally. Fires only when the
+        # server left the image blank (unfurl_url set above), so non-blocked
+        # sources pay nothing.
+        if unfurl_url {
+            try {
+                api = f"https://api.microlink.io/?url={encodeURIComponent(unfurl_url)}";
+                resp: any = await fetch(api);
+                jd: any = await resp.json();
+                if str(jd["status"]) == "success" {
+                    d: any = jd["data"];
+                    im: any = d["image"];
+                    got = str(im["url"]) if im else "";
+                    if got {
+                        repost_img = got;
+                    }
+                }
+            } except Exception {
+                _ignore = None;
+            }
         }
     }
 
@@ -1585,7 +1627,7 @@ def:pub page() -> JsxElement {
 
         {post["is_repost"] and (
             <div className="container narrow">
-                {render_repost_card(post)}
+                {render_repost_card(post, repost_img)}
             </div>
         )}
 
