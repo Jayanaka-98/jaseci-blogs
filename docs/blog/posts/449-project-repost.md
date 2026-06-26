@@ -40,14 +40,10 @@ The same story sits underneath all three: Jaseci was the common thread that made
 
 You can explore the full lineup, with every team, demo videos, live apps, and GitHub repos, on the [EECS 449 projects showcase](https://jaseci-labs.github.io/eecs-449-projects/), and read more in the [U-M story](https://cse.engin.umich.edu/stories/students-build-agentic-ai-tools-for-work-travel-wellness).
 
-## Try it yourself
-
-Want to build something full-stack in a single language? You can install Jac and scaffold a project in a few minutes. The [getting started guide](https://docs.jaseci.org/learn/getting_started/) walks through setup and your first app, with the backend, frontend, and AI in one codebase, the same setup these teams used to ship in a semester.
-
 <div class="cta" markdown="1">
-Same backend, frontend, and AI, all in one language. The setup behind 17 student apps is a few minutes away.
+Want to build something full-stack in a single language? Install [Jac](https://www.jaseci.org/) and scaffold your first app in a few minutes, with the backend, frontend, and AI in one codebase, the same setup behind these 17 student projects.
 
-[Get started with Jac](https://www.jaseci.org/){ .cta-button }
+[Try it yourself](https://docs.jaseci.org/learn/getting_started/){ .cta-button }
 
 [Documentation](https://docs.jaseci.org/) · [GitHub](https://github.com/jaseci-labs/jaseci)
 </div>
