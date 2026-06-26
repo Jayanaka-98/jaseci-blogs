@@ -18,6 +18,24 @@ debug = false
 "@components/*" = "./components/*"
 "@styles/*" = "./styles/*"
 
+# Default <head> for the generated SPA shell. Without this, jac-client emits only
+# <title>app</title> with no meta, so non-JS crawlers (LinkedIn, Slack, Twitter)
+# render a blank "app" card. Site-wide default only (same for every URL); real
+# browsers still get per-page title/og from set_social_meta JS. Per-post cards FOR
+# CRAWLERS need an edge dynamic-rendering layer (jac-client has no SSR).
+#
+# IMPORTANT — jac-client BUG (reported in JACSCALE_DEPLOY_CRASHLOOP_ISSUE.md): the
+# generated <meta> tags are emitted UNQUOTED (`content=Foo Bar`), so any value with
+# a space truncates at the first word, and embedded quotes get &quot;-encoded. So we
+# only set fields that work: `title` (element text, renders in full) and single-token
+# values. LinkedIn falls back to <title> when og:title is absent, so this still yields
+# a correct card title. Re-add og_title/og_description/description once jac-client
+# quotes attribute values.
+[plugins.client.app_meta_data]
+title = "Jaseci Blogs — engineering writing from the Jaseci & Jac ecosystem"
+theme_color = "#b54a1a"
+og_image = "https://www.jaseci.org/images/logo.png"
+
 [plugins.scale]
 enabled = true
 
@@ -95,8 +113,16 @@ SUBMIT_SESSION_SECRET = "${SUBMIT_SESSION_SECRET}"
 # clients that `jac start --scale` needs (the `data` extra alone does not).
 # [data] adds pymongo + redis clients for the auto-provisioned MongoDB/Redis
 # (mongodb_enabled/redis_enabled above), used to persist shareable previews.
-"jac-scale[deploy,data]" = ">=0.2.23"
-jac-client = "*"
+# PINNED (was "jac-scale[deploy,data]" >=0.2.23 / jac-client "*"). The runner's
+# jac-scale version generates the pod manifest; newer releases switched the pod
+# to a boot-time jac binary installer that resolves "latest" from GitHub Releases
+# and crash-loops ("Could not determine latest version from GitHub Releases").
+# Pinned to the last pre-breakage set (all 2026-06-03), still >=0.2.23 so the
+# shared-ingress ALB support is retained. Keep in lockstep with jaclang==0.16.0
+# in .github/workflows/deploy.yml. To re-pin to your last green deploy, read its
+# "Install Jac toolchain" step: "Successfully installed jaclang-X jac-scale-Y …".
+"jac-scale[deploy,data]" = "==0.2.23"
+jac-client = "==0.3.21"
 markdown = ">=3.5"
 pyyaml = ">=6.0"
 pygments = ">=2.17"

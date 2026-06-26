@@ -48,7 +48,12 @@ jobs:
           # (jaseci-labs/jaseci#6322), so they install via `jac install`, which
           # reads [dependencies] in jac.toml into the project's .jac/venv.
           # `jac start` adds that venv to sys.path automatically.
-          pip install jaclang
+          # Pin jaclang: the unpinned `pip install jaclang` pulls the latest,
+          # whose newer in-pod binary bootstrap ("[jac] Fetching latest version
+          # … Could not determine latest version from GitHub Releases") crash-
+          # loops the pod. Pinned to the last pre-breakage release. Bump in
+          # lockstep with the jac-scale/jac-client pins in jac.toml.
+          pip install jaclang==0.16.0
           jac install
 
       - name: Deploy jaseci-blogs with jac-scale
