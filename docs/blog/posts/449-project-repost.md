@@ -24,7 +24,7 @@ draft: true
 
 Building a full AI application usually means stitching together separate systems: one framework for the interface, another for the backend, a database layer underneath, and more tooling to call models and orchestrate workflows. Each seam is its own thing to learn, wire up, and keep from breaking, and for a four-person team on a deadline, a lot of the semester can disappear into that glue work instead of the product.
 
-The single-language design is a big reason a semester was enough. Jac and the Jaseci runtime let a team handle the interface, the application logic, the data, and the AI itself in one language. AI calls are part of the language rather than a bolted-on service, and Jac stays model-agnostic underneath, so teams could reach for whatever model fit without re-architecting anything. Less time on plumbing, more on the actual problem.
+That is exactly where Jac came in. Its single-language design is a big reason a semester was enough: Jac and the Jaseci runtime let a team handle the interface, the application logic, the data, and the AI itself in one language. AI calls are part of the language rather than a bolted-on service, and Jac stays model-agnostic underneath, so teams could reach for whatever model fit without re-architecting anything. Less time on plumbing, more on the actual problem.
 
 ## From the showcase
 
