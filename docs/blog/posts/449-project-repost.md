@@ -43,5 +43,5 @@ You can explore the full lineup, with every team, demo videos, live apps, and Gi
 <div class="cta cta-rich" markdown="1">
 **Want to build something full-stack in a single language?** Install [Jac](https://www.jaseci.org/) and scaffold your first app in a few minutes, with the backend, frontend, and AI in one codebase, the same setup behind these 17 student projects.
 
-[Try it yourself](https://www.jaseci.org/){ .cta-button }
+[Try it yourself](https://docs.jaseci.org/){ .cta-button }
 </div>
