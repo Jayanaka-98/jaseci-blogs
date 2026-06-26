@@ -20,7 +20,7 @@ draft: true
 
 **These weren't chatbot demos.** They were live, full-stack products: conversational interfaces, visual reasoning, document analysis, multimodal input, and multi-step agentic workflows, built for everything from academic advising and health to travel, finance, and career prep.
 
-## One language for the whole stack
+## One language, one semester
 
 Building a full AI application usually means stitching together separate systems: one framework for the interface, another for the backend, a database layer underneath, and more tooling to call models and orchestrate workflows. Each seam is its own thing to learn, wire up, and keep from breaking, and for a four-person team on a deadline, a lot of the semester can disappear into that glue work instead of the product.
 
