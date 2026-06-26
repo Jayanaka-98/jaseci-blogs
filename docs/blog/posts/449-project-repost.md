@@ -18,7 +18,7 @@ draft: true
 
 <!-- more -->
 
-**These weren't chatbot demos.** They were live, full-stack products: conversational interfaces, visual reasoning, document analysis, multimodal input, and multi-step agentic workflows, built for everything from academic advising and health to travel, finance, and career prep.
+**These products weren't chatbot demos.** They were live and full-stack: conversational interfaces, visual reasoning, document analysis, multimodal input, and multi-step agentic workflows, built for everything from academic advising and health to travel, finance, and career prep.
 
 ## One language, one semester
 
@@ -40,10 +40,10 @@ The same story sits underneath all three: Jaseci was the common thread that made
 
 You can explore the full lineup, with every team, demo videos, live apps, and GitHub repos, on the [EECS 449 projects showcase](https://jaseci-labs.github.io/eecs-449-projects/), and read more in the [U-M story](https://cse.engin.umich.edu/stories/students-build-agentic-ai-tools-for-work-travel-wellness).
 
-<div class="cta" markdown="1">
+<div class="cta cta-rich" markdown="1">
 Want to build something full-stack in a single language? Install [Jac](https://www.jaseci.org/) and scaffold your first app in a few minutes, with the backend, frontend, and AI in one codebase, the same setup behind these 17 student projects.
 
-[Try it yourself](https://docs.jaseci.org/learn/getting_started/){ .cta-button }
+[Try it yourself](https://www.jaseci.org/){ .cta-button }
 
-[Documentation](https://docs.jaseci.org/) · [GitHub](https://github.com/jaseci-labs/jaseci)
+[Read the documentation](https://docs.jaseci.org/)
 </div>
