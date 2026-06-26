@@ -238,6 +238,7 @@ def:pub page() -> JsxElement {
     has is_repost: bool = False;
     has repost_url: str = "";
     has repost_source: str = "";
+    has as_team: bool = False;  # reviewers only: publish under the shared "Jaseci Team" byline
 
     has submitting: bool = False;
     has submit_error: str = "";
@@ -441,18 +442,21 @@ def:pub page() -> JsxElement {
                     gh_enc=gh_enc, slug=slug, title=title, categories=cats,
                     description=description, body_md=body, images=images, pr_number=edit_pr,
                     is_repost=is_repost, repost_url=repost_url, repost_source=repost_source,
+                    as_team=as_team,
                 );
             } elif edit_pr > 0 {
                 res = root spawn UpdatePost(
                     gh_enc=gh_enc, pr_number=edit_pr, title=title, slug=slug,
                     categories=cats, description=description, body_md=body, images=images,
                     is_repost=is_repost, repost_url=repost_url, repost_source=repost_source,
+                    as_team=as_team,
                 );
             } else {
                 res = root spawn SubmitPost(
                     gh_enc=gh_enc, title=title, slug=slug, categories=cats,
                     description=description, body_md=body, author_bio=bio, images=images,
                     is_repost=is_repost, repost_url=repost_url, repost_source=repost_source,
+                    as_team=as_team,
                 );
             }
             if res and res.reports {
@@ -487,6 +491,7 @@ def:pub page() -> JsxElement {
         description = ""; body = ""; bio = ""; cats = []; images = [];
         preview_html = ""; submit_error = "";
         is_repost = False; repost_url = ""; repost_source = "";
+        as_team = False;
         editing_published = False; edit_existing_prs = [];
     }
 
@@ -508,6 +513,7 @@ def:pub page() -> JsxElement {
                     is_repost = bool(data["is_repost"]);
                     repost_url = str(data["repost_url"]);
                     repost_source = str(data["repost_source"]);
+                    as_team = bool(any([str(a) == "jaseci-team" for a in data["authors"]]));
                     tab = "write";
                     window.scrollTo(0, 0);
                 } else {
@@ -613,6 +619,7 @@ def:pub page() -> JsxElement {
                     is_repost = bool(data["is_repost"]);
                     repost_url = str(data["repost_url"]);
                     repost_source = str(data["repost_source"]);
+                    as_team = bool(any([str(a) == "jaseci-team" for a in data["authors"]]));
                     edit_existing_prs = data["existing_prs"];
                     edit_pr = 0;
                     tab = "write";
@@ -796,6 +803,20 @@ def:pub page() -> JsxElement {
                         for c in SUBMIT_CATEGORIES
                     ]}
                 </div>
+
+                {is_reviewer and (
+                    <>
+                        <label className="eyebrow" style={{"marginTop": "1rem", "display": "block"}}>Byline</label>
+                        <label style={{"display": "flex", "alignItems": "center", "gap": "0.5rem", "cursor": "pointer"}}>
+                            <input
+                                type="checkbox"
+                                checked={as_team}
+                                onChange={lambda e: ChangeEvent { as_team = bool(e.target.checked); }}
+                            />
+                            <span className="muted small">Publish under the shared “Jaseci Team” byline instead of your name (reviewers only)</span>
+                        </label>
+                    </>
+                )}
 
                 <label className="eyebrow" style={{"marginTop": "1rem", "display": "block"}}>Short description (optional)</label>
                 <input

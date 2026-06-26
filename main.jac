@@ -1224,6 +1224,9 @@ def:priv load_scheduled_slugs() -> dict {
 }
 
 
+glob TEAM_AUTHOR_ID = "jaseci-team";  # shared byline; reviewers only (see .authors.yml)
+
+
 def:priv resolve_author_id(profile: dict, bio: str) -> tuple {
     # Returns (author_id, new_entry_or_None). Reuse an existing .authors.yml
     # entry whose avatar references this GitHub numeric id, or whose key matches
@@ -2061,7 +2064,8 @@ def:priv open_submission_prs(token: str) -> list {
 
 def:priv build_edited_markdown(
     original_content: str, title: str, categories: list, description: str, body: str,
-    is_repost: bool = False, repost_url: str = "", repost_source: str = ""
+    is_repost: bool = False, repost_url: str = "", repost_source: str = "",
+    author_override: str = ""
 ) -> str {
     # Rebuild a post's .md PRESERVING its frontmatter — date, authors, slug, and
     # crucially the draft state (a live post has no draft key, so the edit stays
@@ -2085,6 +2089,10 @@ def:priv build_edited_markdown(
         meta["description"] = description;
     } else {
         meta.pop("description", None);
+    }
+    # Reviewer re-attribution: swap the byline to the shared team author.
+    if author_override {
+        meta["authors"] = [author_override];
     }
     # Toggle repost keys to match the form: set them when checked + a URL is
     # given, otherwise strip any that were there (the post is no longer a repost).
@@ -2122,6 +2130,7 @@ walker:priv SubmitPost {
     has is_repost: bool = False;
     has repost_url: str = "";
     has repost_source: str = "";
+    has as_team: bool = False;  # reviewers only: publish under the shared byline
 
     can submit with Root entry {
         gh_token = decrypt_gh(self.gh_enc);
@@ -2176,6 +2185,12 @@ walker:priv SubmitPost {
         image_files = img_res["files"];
 
         (author_id, new_entry) = resolve_author_id(profile, self.author_bio.strip());
+        # Shared "Jaseci Team" byline — reviewers only. The shared entry already
+        # lives in .authors.yml, so no new author entry is created.
+        if self.as_team and has_write_access(gh_token) {
+            author_id = TEAM_AUTHOR_ID;
+            new_entry = None;
+        }
         post_md = build_post_markdown(
             title, slug, cats, self.description.strip(), author_id, body,
             self.is_repost, repost_url, self.repost_source.strip(),
@@ -2262,6 +2277,7 @@ walker:priv UpdatePost {
     has is_repost: bool = False;
     has repost_url: str = "";
     has repost_source: str = "";
+    has as_team: bool = False;  # reviewers only: publish under the shared byline
 
     can update with Root entry {
         gh_token = decrypt_gh(self.gh_enc);
@@ -2323,6 +2339,9 @@ walker:priv UpdatePost {
         # Resolve the author's id (reuses their existing .authors.yml entry);
         # don't re-touch .authors.yml on edit — the entry already exists.
         (author_id, _new) = resolve_author_id(profile, "");
+        if self.as_team and has_write_access(gh_token) {
+            author_id = TEAM_AUTHOR_ID;
+        }
         post_md = build_post_markdown(
             title, slug, cats, self.description.strip(), author_id, body,
             self.is_repost, repost_url, self.repost_source.strip(),
@@ -2429,6 +2448,7 @@ walker:priv EditPublishedPost {
     has is_repost: bool = False;
     has repost_url: str = "";
     has repost_source: str = "";
+    has as_team: bool = False;  # reviewers only: re-attribute to the shared byline
 
     can edit with Root entry {
         gh_token = decrypt_gh(self.gh_enc);
@@ -2481,9 +2501,13 @@ walker:priv EditPublishedPost {
             report {"ok": False, "error": img_res["error"]};
             return;
         }
+        author_override = "";
+        if self.as_team and has_write_access(gh_token) {
+            author_override = TEAM_AUTHOR_ID;
+        }
         post_md = build_edited_markdown(
             original, title, cats, self.description.strip(), self.body_md,
-            self.is_repost, repost_url, self.repost_source.strip(),
+            self.is_repost, repost_url, self.repost_source.strip(), author_override,
         );
         # Write back to the post's ACTUAL file (filename != slug), so the PR edits
         # the existing post instead of creating a new file.
