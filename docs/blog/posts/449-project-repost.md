@@ -1,5 +1,5 @@
 ---
-date: 2026-06-26
+date: 2026-06-29
 authors:
   - jaseci-team
 categories:
@@ -18,7 +18,7 @@ draft: true
 
 <!-- more -->
 
-**These products weren't chatbot demos.** They were live and full-stack: conversational interfaces, visual reasoning, document analysis, multimodal input, and multi-step agentic workflows, built for everything from academic advising and health to travel, finance, and career prep.
+**These products aren't chatbot demos.** They are live and full-stack: conversational interfaces, visual reasoning, document analysis, multimodal input, and multi-step agentic workflows, built for everything from academic advising and health to travel, finance, and career prep.
 
 ## One language, one semester
 
