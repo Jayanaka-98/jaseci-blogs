@@ -1,15 +1,14 @@
 ---
-date: 2026-06-29
+date: '2026-07-01'
 authors:
-  - jaseci-team
+- jaseci-team
 categories:
-  - Community
-  - Developers
+- Community
+- Developers
 slug: 449-project-repost
 repost: true
-repost_url: "https://cse.engin.umich.edu/stories/students-build-agentic-ai-tools-for-work-travel-wellness"
-repost_source: "Students build agentic AI tools for work, travel, wellness"
-draft: true
+repost_url: https://cse.engin.umich.edu/stories/students-build-agentic-ai-tools-for-work-travel-wellness
+repost_source: Students build agentic AI tools for work, travel, wellness
 ---
 
 # What 75 students shipped in one semester with Jac
