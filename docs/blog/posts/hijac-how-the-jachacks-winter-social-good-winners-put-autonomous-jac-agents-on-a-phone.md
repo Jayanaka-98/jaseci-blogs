@@ -15,6 +15,8 @@ draft: true
 
 Nitin Shankar Madhu, together with teammates Chuka Ezeoke and Meron, took first place in the Social Good track at JacHacks Winter with **Hijac**, a pipeline that compiles Jac apps straight into installable native mobile apps. Their demo: an agent that watches a phone's sensors, notices when its owner has fallen, and calls an emergency contact on its own if they don't respond within 30 seconds.
 
+<--more-->
+
 ## From full-stack web to a phone in your pocket
 
 Jac already lets a team build the interface, the logic, the data, and the AI in one language and one codebase. The team pushed that further: take the same Jac app and put it on a phone, running as a real agent that senses the world and acts in it, not just another web UI.
