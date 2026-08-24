@@ -2063,10 +2063,15 @@ img {
 .community-timeline {
     padding: 1rem 0 2rem;
 }
-/* The spine reads better narrower than the 1200px shell — the hero and its
-   stat row still get the full width above it. */
-.tl-years {
+/* The spine reads better narrower than the 1200px shell. Centred, not just
+   capped: left-aligned in the container it sat on a 524px axis while the CTA
+   below centred on the page's 640px one, which read as a layout bug. The page
+   header shares this column so the h1 lines up with the spine. */
+.tl-years,
+.tl-head {
     max-width: 920px;
+    margin-left: auto;
+    margin-right: auto;
 }
 .tl-year-block {
     padding-top: 2.5rem;

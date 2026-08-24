@@ -167,7 +167,7 @@ cl {
             return <>
                 <div className="route-progress" />
                 <section className="container">
-                    <header style={{"padding": "3rem 0 2rem"}}>
+                    <header className="tl-head" style={{"padding": "3rem 0 2rem"}}>
                         <span className="skeleton skeleton-line short" />
                         <span className="skeleton skeleton-title" style={{"height": "3rem"}} />
                         <span className="skeleton skeleton-line medium" />
