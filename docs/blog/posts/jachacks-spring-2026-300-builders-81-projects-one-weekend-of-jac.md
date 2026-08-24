@@ -4,7 +4,6 @@ authors:
 - jaseci-team
 categories:
 - Community
-- Built with Jac
 slug: jachacks-spring-2026-300-builders-81-projects-one-weekend-of-jac
 ---
 
