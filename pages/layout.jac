@@ -77,6 +77,7 @@ cl {
 
                     <nav className="primary-nav" aria-label="Primary">
                         <Link to="/blog">Latest</Link>
+                        <Link to="/blog/events">Events</Link>
                         <Link to="/blog/archive">Archive</Link>
                         <Link to="/blog/categories">Categories</Link>
                         <a href="https://newsletter.jaseci.org" target="_blank" rel="noopener">Newsletter</a>
@@ -150,6 +151,7 @@ cl {
                 {menu_open and (
                     <nav className="mobile-nav container" aria-label="Mobile" onClick={lambda -> None { menu_open = False; }}>
                         <Link to="/blog">Latest</Link>
+                        <Link to="/blog/events">Events</Link>
                         <Link to="/blog/archive">Archive</Link>
                         <Link to="/blog/categories">Categories</Link>
                         <a href="https://newsletter.jaseci.org" target="_blank" rel="noopener">Newsletter</a>
@@ -183,6 +185,7 @@ cl {
                         <div>
                             <p className="eyebrow">Read</p>
                             <Link to="/blog">Latest posts</Link>
+                            <Link to="/blog/events">Events</Link>
                             <Link to="/blog/archive">Archive</Link>
                             <Link to="/blog/categories">Categories</Link>
                         </div>

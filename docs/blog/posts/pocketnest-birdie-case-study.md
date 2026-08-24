@@ -4,7 +4,6 @@ authors:
 - jaseci-team
 categories:
 - Built with Jac
-- Community
 slug: pocketnest-birdie-case-study
 ---
 

@@ -850,6 +850,243 @@ walker:pub GetArchive {
 }
 
 
+# ───────────────────────── Community timeline ─────────────────────────
+#
+# /blog/community renders ONE chronological spine that interleaves two kinds of
+# entry:
+#   • event — curated, from docs/blog/.events.yml (hand-edited, like
+#             .authors.yml — NOT bot-owned the way .schedule.yml is)
+#   • post  — a published "Community" post that no event claims
+#
+# An event claims a post by listing its slug under `posts:`; a claimed post
+# renders inside the event card rather than as its own spine entry, so a
+# hackathon and its three write-ups read as one moment instead of four. Nothing
+# has to be registered in .events.yml for a Community post to show up — the file
+# only adds event scaffolding around posts that have some.
+
+glob EVENTS_PATH = "docs/blog/.events.yml";
+glob COMMUNITY_CATEGORY = "Community";
+
+
+def:priv load_events() -> list {
+    path = Path(EVENTS_PATH);
+    if not path.exists() {
+        return [];
+    }
+    try {
+        data = yaml.safe_load(path.read_text(encoding="utf-8"));
+    } except Exception {
+        return [];
+    }
+    if not isinstance(data, dict) {
+        return [];
+    }
+    items = data.get("events", []);
+    if not isinstance(items, list) {
+        return [];
+    }
+    return [e for e in items if isinstance(e, dict)];
+}
+
+
+def:priv event_asset(raw: str) -> str {
+    # Event imagery lives in docs/assets alongside post imagery, so it has to be
+    # served from the repo and not the pod's public/ mount — see asset_base_url()
+    # for why. Differs from normalize_avatar() in that "/assets/…" is rewritten
+    # too: an avatar may legitimately be a root-relative path, an event cover
+    # never is.
+    val = str(raw or "").strip();
+    if not val {
+        return "";
+    }
+    if val.startswith("http://") or val.startswith("https://") {
+        return val;
+    }
+    while val.startswith("./") or val.startswith("../") {
+        val = val.split("/", 1)[1];
+    }
+    val = val.lstrip("/");
+    if val.startswith("assets/") {
+        val = val.split("/", 1)[1];
+    }
+    return asset_base_url() + "/" + val;
+}
+
+
+def:priv event_sort_key(ev: dict) -> str {
+    # Sortable YYYY-MM-DD. A month- or year-precision entry sorts to the END of
+    # its period, so a dated post from the same month can't jump above the event
+    # it belongs beside.
+    raw = str(ev.get("start", "")).strip();
+    if len(raw) == 7 {
+        return raw + "-31";
+    }
+    if len(raw) == 4 {
+        return raw + "-12-31";
+    }
+    return raw;
+}
+
+
+def:priv event_date_label(ev: dict) -> str {
+    override = str(ev.get("date_label", "")).strip();
+    if override {
+        return override;
+    }
+    start = str(ev.get("start", "")).strip();
+    end = str(ev.get("end", "")).strip();
+    if len(start) == 4 {
+        return start;
+    }
+    if len(start) == 7 {
+        try {
+            return date_cls.fromisoformat(start + "-01").strftime("%B %Y");
+        } except Exception {
+            return start;
+        }
+    }
+    if not end or end == start {
+        return format_date_long(start);
+    }
+    try {
+        s = date_cls.fromisoformat(start);
+        e = date_cls.fromisoformat(end);
+    } except Exception {
+        return format_date_long(start);
+    }
+    if s.year == e.year and s.month == e.month {
+        return s.strftime("%B") + " " + str(s.day) + "–" + str(e.day) + ", " + str(s.year);
+    }
+    if s.year == e.year {
+        return (
+            s.strftime("%b") + " " + str(s.day) + " – "
+            + e.strftime("%b") + " " + str(e.day) + ", " + str(e.year)
+        );
+    }
+    return format_date_short(start) + " – " + format_date_short(end);
+}
+
+
+def:priv timeline_post_ref(p: dict) -> dict {
+    # Deliberately lighter than post_summary(): the timeline links out to posts,
+    # it never renders their bodies, so no excerpt/peek HTML is built.
+    return {
+        "slug": p["slug"],
+        "title": p["title"],
+        "date": p["date"],
+        "date_long": p["date_long"],
+        "date_short": p["date_short"],
+        "description": p["description"],
+        "authors": p["authors"],
+        "categories": p["categories"],
+        "reading_minutes": p["reading_minutes"],
+        "is_repost": p["is_repost"],
+        "repost_url": p["repost_url"],
+        "repost_source": p["repost_source"],
+    };
+}
+
+
+def:priv event_entry(ev: dict, by_slug: dict, claimed: dict) -> dict {
+    raw_slugs = ev.get("posts", []);
+    slugs: list = [];
+    if isinstance(raw_slugs, list) {
+        slugs = raw_slugs;
+    } else {
+        slugs = [raw_slugs];
+    }
+    refs: list = [];
+    for s in slugs {
+        key = str(s);
+        post = by_slug.get(key);
+        # A slug with no published post behind it (draft, renamed, taken down)
+        # is skipped rather than rendered as a dead link.
+        if post is None {
+            continue;
+        }
+        claimed[key] = True;
+        refs.append(timeline_post_ref(post));
+    }
+    refs.sort(key=lambda(x: dict) -> str { return str(x["date"]); }, reverse=True);
+
+    raw_stats = ev.get("stats", []);
+    stats: list = raw_stats if isinstance(raw_stats, list) else [];
+    raw_gallery = ev.get("gallery", []);
+    gallery: list = raw_gallery if isinstance(raw_gallery, list) else [raw_gallery];
+
+    return {
+        "type": "event",
+        "id": str(ev.get("id", "")),
+        "kind": str(ev.get("kind", "Event")),
+        "title": str(ev.get("title", "")),
+        "date_label": event_date_label(ev),
+        "location": str(ev.get("location", "")),
+        "url": str(ev.get("url", "")),
+        "summary": str(ev.get("summary", "")).strip(),
+        "cover": event_asset(str(ev.get("cover", ""))),
+        "gallery": [event_asset(str(g)) for g in gallery if str(g).strip()],
+        "stats": [
+            {"label": str(s.get("label", "")), "value": str(s.get("value", ""))}
+            for s in stats if isinstance(s, dict)
+        ],
+        "posts": refs,
+        "post_count": len(refs),
+    };
+}
+
+
+walker:pub GetCommunityTimeline {
+    can get with Root entry {
+        all_posts = list_all_posts();
+        by_slug: dict = {};
+        for p in all_posts {
+            by_slug[p["slug"]] = p;
+        }
+
+        claimed: dict = {};
+        entries: list = [];
+
+        for ev in load_events() {
+            entry = event_entry(ev, by_slug, claimed);
+            entry["sort"] = event_sort_key(ev);
+            entries.append(entry);
+        }
+
+        for p in all_posts {
+            if p["slug"] in claimed {
+                continue;
+            }
+            if COMMUNITY_CATEGORY not in p["categories"] {
+                continue;
+            }
+            entries.append({
+                "type": "post",
+                "id": p["slug"],
+                "sort": p["date"],
+                "post": timeline_post_ref(p),
+            });
+        }
+
+        entries.sort(key=lambda(x: dict) -> str { return str(x["sort"]); }, reverse=True);
+
+        # Group under year headings for the rail, preserving the sorted order.
+        years: list = [];
+        seen_years: dict = {};
+        for e in entries {
+            sort_key = str(e["sort"]);
+            y = sort_key[:4] if len(sort_key) >= 4 else "Undated";  # jac:ignore[E1053]
+            if y not in seen_years {
+                seen_years[y] = {"year": y, "entries": []};
+                years.append(seen_years[y]);
+            }
+            seen_years[y]["entries"].append(e);
+        }
+
+        report {"ok": True, "years": years};
+    }
+}
+
+
 walker:pub GetSearchIndex {
     can get with Root entry {
         all_posts = list_all_posts();
