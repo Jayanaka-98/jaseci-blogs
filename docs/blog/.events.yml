@@ -1,0 +1,164 @@
+# Community events. The curated spine of /blog/events.
+#
+# UNLIKE .schedule.yml (bot-owned), this file is HAND-EDITED. Adding an event is
+# a normal PR. Append an entry, drop any imagery under docs/assets/, and list the
+# slugs of the posts written about it.
+#
+# An event CLAIMS a post by listing its `slug:` under `posts:`. A claimed post
+# renders inside the event card instead of as its own timeline entry, so a
+# hackathon and its three write-ups read as one moment rather than four.
+# Published posts in the "Community" category that no event claims still appear
+# on the timeline on their own. Nothing has to be registered here to show up.
+#
+# Fields
+#   id        required, kebab-case, unique. React key + anchor.
+#   title     required. Card headline.
+#   kind      required. Badge on the card: Hackathon | Program | Course | Meetup
+#             | Launch. Free text, so a new kind just works.
+#   start     required. YYYY-MM-DD, or YYYY-MM / YYYY when only the month or year
+#             is known. Drives ordering (newest first).
+#   end       optional. YYYY-MM-DD. Renders a range: "May 15–19, 2026".
+#   date_label  optional. Overrides the rendered date entirely when a range does
+#             not describe it well ("Winter semester 2026").
+#   location  optional. Shown under the title.
+#   url       optional. Event site / project gallery, opens in a new tab.
+#   summary   optional. Two or three sentences, plain text.
+#   cover     optional. `assets/...` resolves against the published asset base
+#             (the repo on GitHub raw), same as post imagery. Absolute URLs pass
+#             through untouched.
+#   gallery   optional. Up to 4 extra images, rendered as a thumbnail strip.
+#   stats     optional. Display pills, free text so "200+" stays honest.
+#   posts     optional. Post slugs, newest-first order is applied automatically.
+
+events:
+  - id: jachacks-sf-2026
+    title: JacHacks SF
+    kind: Hackathon
+    start: 2026-07-26
+    location: Founders, Inc., San Francisco, CA
+    url: https://jachacks.org/
+    summary: >-
+      A single-day, in-person hackathon at Founders, Inc. 200+ builders shipped
+      77 projects across three tracks (Agentic AI, Fintech/Open and Social
+      Impact), plus three special awards, for a $9,000 prize pool.
+    cover: https://jachacks.org/photos/sf_26/sf_01.webp
+    gallery:
+      - assets/jachacks-sf-2026/jachacks-sf-2026-buildroom.jpg
+      - assets/jachacks-sf-2026/jachacks-sf-2026-demos.jpg
+      - assets/jachacks-sf-2026/jachacks-sf-2026-hardware.jpg
+    stats:
+      - label: Builders
+        value: 200+
+      - label: Projects
+        value: "77"
+      - label: Tracks
+        value: "3"
+      - label: Prize pool
+        value: $9,000
+    posts:
+      - jachacks-sf-2026-77-projects-in-one-day
+
+  - id: jachacks-spring-2026
+    title: JacHacks Spring
+    kind: Hackathon
+    start: 2026-05-15
+    end: 2026-05-19
+    location: Online, worldwide
+    url: https://jachacks.org/spring/
+    summary: >-
+      Four days, fully online. 300+ builders shipped 81 projects across Agentic
+      AI, Consumer Healthcare, Fintech and Social Impact, with special awards
+      from Featherless.AI and Lovable. Jason Mars opened with the keynote.
+    cover: assets/jachacks-spring-2026-hero.jpg
+    stats:
+      - label: Builders
+        value: 300+
+      - label: Projects
+        value: "81"
+      - label: Tracks
+        value: "4"
+      - label: Winners
+        value: "13"
+    posts:
+      - jachacks-spring-2026-300-builders-81-projects-one-weekend-of-jac
+
+  # Exact dates are not stated in any published write-up. The recap ran
+  # 2026-04-13. Month precision until someone fills in the weekend.
+  - id: jachacks-winter-2026
+    title: JacHacks Winter
+    kind: Hackathon
+    start: 2026-04
+    location: University of Michigan, Ann Arbor, MI
+    url: https://jachacks-2026.devpost.com/project-gallery
+    summary: >-
+      Launched as JacHacks 2026, the first JacHacks at the University of
+      Michigan. What started as a local Ann Arbor initiative drew 400+
+      applications; 170 students and professionals had 24 hours to go from
+      ideation to a finished product, and 66 shipped.
+    cover: assets/jachacks-2026/OpenCeremony.jpg
+    gallery:
+      - assets/jachacks-2026/YC-Speaker.jpg
+    stats:
+      - label: Applications
+        value: 400+
+      - label: Participants
+        value: "170"
+      - label: Projects
+        value: "66"
+      - label: Build window
+        value: 24 hours
+    posts:
+      - jachacks-2026
+      - hijac-how-the-jachacks-winter-social-good-winners-put-autonomous-jac-agents-on-a-phone
+      - ghostwatch-how-one-of-the-jachacks-winter-winners-built-an-autonomous-code-guardian-in-jac
+
+  # The showcase closed U-M's Winter semester; `start` is the semester end, and
+  # date_label carries what the write-up actually says.
+  - id: eecs-449-winter-2026
+    title: EECS 449 Conversational AI showcase
+    kind: Course
+    start: 2026-04
+    date_label: Winter semester 2026
+    location: University of Michigan, Ann Arbor, MI
+    url: https://jaseci-labs.github.io/eecs-449-projects/
+    summary: >-
+      75+ students, working in teams, built 17 full-stack AI applications in a
+      single semester, most of them in Jac. Not chatbot demos, but live apps
+      with multimodal input and multi-step agentic workflows.
+    stats:
+      - label: Students
+        value: 75+
+      - label: Apps shipped
+        value: "17"
+      - label: Duration
+        value: One semester
+    posts:
+      - 449-project-repost
+
+  # A three-month program; only its close is pinned down by the write-ups.
+  - id: ouk-kenya-genai-2026
+    title: Open University of Kenya GenAI program
+    kind: Program
+    start: 2026-02
+    date_label: Through February 2026
+    location: Nairobi, Kenya
+    summary: >-
+      A three-month Jaseci Labs program at OUK: a GenAI lecture series led by
+      Jason Mars, daily hands-on tutorials and community mentorship, closing
+      with a month-long hackathon. 200+ teams registered and 98 projects landed.
+    cover: assets/nairobi-ai-jaseci-ouk-1.jpg
+    gallery:
+      - assets/nairobi-ai-jaseci-ouk-2.jpg
+      - assets/nairobi-ai-jaseci-ouk-3.jpg
+    stats:
+      - label: Students
+        value: 1,500+
+      - label: Teams
+        value: 200+
+      - label: Projects
+        value: "98"
+      - label: Hackathon
+        value: One month
+    posts:
+      - nairobi-ai-jaseci-ouk
+      - nairobi-hackathon-feedback

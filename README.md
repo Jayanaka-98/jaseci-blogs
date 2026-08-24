@@ -138,6 +138,45 @@ authors:
 
 To get your GitHub avatar URL, just replace `YOUR_GITHUB_USER_ID` with your numeric GitHub user ID. You can find your ID by visiting `https://api.github.com/users/YOUR_GITHUB_USERNAME` -- look for the `id` field in the response. This will make your profile picture show up nicely alongside your posts.
 
+### Adding a Community Event
+
+`/blog/events` renders one chronological timeline of hackathons, campus programs
+and meetups, each event showing the posts written about it. It reads two sources:
+
+- **Any published post in the `Community` category** shows up on its own. Nothing
+  needs registering: tag the post and it lands on the timeline.
+- **`docs/blog/.events.yml`** adds the event scaffolding: dates, location, stats,
+  photos. An event *claims* posts by slug, and a claimed post renders inside the
+  event card instead of as its own entry, so a hackathon and its three write-ups
+  read as one moment.
+
+Unlike `.schedule.yml`, this file is hand-edited, so adding an event is a normal PR:
+
+```yaml
+events:
+  - id: jachacks-sf-2026      # kebab-case, unique
+    title: JacHacks SF
+    kind: Hackathon           # badge on the card (Hackathon/Program/Course/…)
+    start: 2026-07-26         # YYYY-MM-DD, or YYYY-MM / YYYY when less is known
+    end: 2026-07-26           # optional; renders a range
+    location: Founders, Inc., San Francisco, CA
+    url: https://jachacks.org/
+    summary: >-
+      Two or three sentences, plain text.
+    cover: assets/jachacks-sf-2026/jachacks-sf-2026-group.jpg
+    gallery:                  # optional, up to 4 thumbnails
+      - assets/jachacks-sf-2026/jachacks-sf-2026-demos.jpg
+    stats:                    # display pills, free text so "200+" stays honest
+      - label: Builders
+        value: 200+
+    posts:
+      - jachacks-sf-2026-77-projects-in-one-day
+```
+
+Images go under `docs/assets/` like post imagery (under 100KB, same as posts) and
+are served from the repo, so `assets/…` paths resolve wherever the app is running.
+The file's header comment documents every field; see [docs/blog/.events.yml](docs/blog/.events.yml).
+
 ## Features
 
 - **Jac Syntax Highlighting**: Beautiful syntax highlighting for Jac code using custom Pygments and Monaco lexers
