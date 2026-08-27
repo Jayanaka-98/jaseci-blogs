@@ -1,11 +1,10 @@
 ---
-date: 2026-08-27                # placeholder; auto-publisher will overwrite when post goes live
+date: '2026-08-27'
 authors:
-  - jaseci-team
+- jaseci-team
 categories:
-  - Community
+- Community
 slug: jachacks-2026-learnings
-draft: true
 ---
 
 # We Threw 1,000 Hackers at Jac. Here's What Broke and What Stuck.
