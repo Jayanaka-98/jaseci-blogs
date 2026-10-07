@@ -46,7 +46,12 @@ In the first race, both take the same four-hop route:
 
 The chat model finishes in **8.33 seconds**. Jev finishes in **1.02 seconds**. The dashboard reports **8.2× faster** and **30× cheaper** for that run.
 
+<figure markdown="span">
+
 ![The first race ends at Magnetic Resonance Imaging for both walkers, with the same four-hop path and different recorded times and costs.](/assets/one-agent-two-model-types/mri-race.webp)
+
+<figcaption>Same question, starting point, graph, and walker code. The model binding is different.</figcaption>
+</figure>
 
 ## The same code makes both decisions
 
@@ -102,7 +107,12 @@ A chat model receives messages and generates a response. byLLM interprets that r
 
 A System One model receives **state and questions with defined possible answers**. Jev returns probabilities over those answers without generating a free-form answer. byLLM uses the returned scores to select the value and reconstruct the type the caller expects.
 
+<figure markdown="span">
+
 ![A shared Jac decision contract branches into a chat request that generates a response and a System One request that scores predefined answers. Both paths return the typed value expected by the same walker.](/assets/one-agent-two-model-types/model-paths.svg)
+
+<figcaption>The application describes the decision once. The selected backend determines how that decision is answered. The diagram shows the normal successful paths; fallback is discussed below.</figcaption>
+</figure>
 
 At the **Knowledge** node in our example, the decision is which current neighbor to visit next. On the chat path, the request asks the model to choose using the question and candidate descriptions. On the System One path, those candidates become the allowed answers to a choice question. The selected answer maps back to an existing Jac node.
 
