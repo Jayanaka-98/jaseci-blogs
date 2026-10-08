@@ -1,5 +1,5 @@
 ---
-date: 2026-10-07
+date: 2026-10-08
 authors:
   - jayanaka
 categories:
@@ -13,6 +13,14 @@ draft: true
 An agent is walking through a graph. At every step, it needs to decide where to go next and whether it has found the answer. We can ask a chat model to make those decisions. We can also ask a model built specifically to choose between known answers. In Jac, both can run the same agent code.
 
 <!-- more -->
+
+<!-- Post-specific reading style. Keep this below the excerpt marker. -->
+<style id="jac-model-reading-style">
+.prose:has(#jac-model-reading-style) p {
+  text-align: left;
+  hyphens: none;
+}
+</style>
 
 [PR #9656](https://github.com/jaseci-labs/jac/pull/9656) adds System One model support to byLLM. This post walks through a graph navigation demo using Claude Haiku 4.5 and TypeSafe's Jev, then looks at how Meaning-Typed Programming makes that switch possible.
 
@@ -109,7 +117,7 @@ A System One model receives **state and questions with defined possible answers*
 
 <figure markdown="span">
 
-![A shared Jac decision contract branches into a chat request that generates a response and a System One request that scores predefined answers. Both paths return the typed value expected by the same walker.](/assets/one-agent-two-model-types/model-paths.svg)
+![A shared Jac decision contract branches into a chat request that generates a response and a System One request that scores predefined answers. Both paths return the typed value expected by the same walker.](/assets/one-agent-two-model-types/model-paths_2.svg)
 
 <figcaption>The application describes the decision once. The selected backend determines how that decision is answered. The diagram shows the normal successful paths; fallback is discussed below.</figcaption>
 </figure>
